@@ -1,0 +1,2 @@
+class GistValidator:
+    pass

@@ -1,0 +1,2 @@
+class GistRepository:
+    pass

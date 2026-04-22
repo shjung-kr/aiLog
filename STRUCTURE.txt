@@ -1,0 +1,36 @@
+aiLog/
+├─ apps/
+│  ├─ web/
+│  │  ├─ app/
+│  │  │  ├─ chat/
+│  │  │  ├─ search/
+│  │  │  ├─ episodes/
+│  │  │  ├─ memories/
+│  │  │  └─ sessions/
+│  │  ├─ components/
+│  │  ├─ lib/
+│  │  ├─ hooks/
+│  │  └─ public/
+│  └─ api/
+│     ├─ app/
+│     │  ├─ core/
+│     │  ├─ db/
+│     │  │  ├─ models/
+│     │  │  └─ repositories/
+│     │  ├─ schemas/
+│     │  ├─ api/v1/endpoints/
+│     │  ├─ pipeline/
+│     │  │  ├─ ingestion/
+│     │  │  ├─ segmentation/
+│     │  │  ├─ gist/
+│     │  │  ├─ episode/
+│     │  │  └─ memory/
+│     │  ├─ services/
+│     │  ├─ search/
+│     │  ├─ llm/prompts/
+│     │  └─ utils/
+│     └─ tests/
+├─ packages/
+├─ infrastructure/
+├─ docs/
+└─ scripts/

@@ -1,0 +1,2 @@
+class GistGenerator:
+    pass
