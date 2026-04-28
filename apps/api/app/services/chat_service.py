@@ -31,6 +31,7 @@ class ChatService:
             content=payload.content,
             occurred_at=utc_now(),
             message_type="question",
+            metadata=payload.metadata,
         )
 
         conversation = self.rawlog_service.list_session_rawlogs(session_id)

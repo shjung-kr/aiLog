@@ -8,6 +8,7 @@ class ChatMessageCreate(BaseModel):
     user_id: str | None = None
     title: str | None = None
     content: str
+    metadata: dict | None = None
 
 
 class ChatMessageResponse(BaseModel):
