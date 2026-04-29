@@ -135,6 +135,9 @@ class EpisodeService:
     def list_all_episodes(self, limit: int = 200) -> list[Episode]:
         return self.episode_repository.list_all(limit=limit)
 
+    def update_episode(self, episode: Episode) -> Episode:
+        return self.episode_repository.update(episode)
+
     def list_episode_rawlog_ids(self, episode_id: str) -> list[str]:
         return self.episode_repository.list_rawlog_ids(episode_id)
 

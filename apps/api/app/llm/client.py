@@ -19,6 +19,7 @@ class LLMClient:
             raise RuntimeError("OPENAI_API_KEY is not configured")
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.model = settings.openai_model
+        self.embedding_model = settings.openai_embedding_model
 
     def generate_reply(self, rawlogs: list[RawLog]) -> tuple[str, str]:
         response = self.client.responses.create(
@@ -37,6 +38,15 @@ class LLMClient:
         if not content:
             raise RuntimeError("OpenAI returned an empty response")
         return content, self.model
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        response = self.client.embeddings.create(
+            model=self.embedding_model,
+            input=texts,
+        )
+        return [item.embedding for item in response.data]
 
     def build_episodes(self, turns: list[dict]) -> list[dict]:
         response = self.client.responses.create(
