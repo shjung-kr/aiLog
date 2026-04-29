@@ -32,7 +32,14 @@ def _build_turn_service(db: Session) -> TurnService:
 
 def _serialize_episode(episode_service: EpisodeService, episode: Episode) -> EpisodeRead:
     data = EpisodeRead.model_validate(episode)
-    return data.model_copy(update={"rawlog_ids": episode_service.list_episode_rawlog_ids(episode.episode_id)})
+    metadata = dict(data.metadata or {})
+    metadata.pop("semantic_embedding", None)
+    return data.model_copy(
+        update={
+            "rawlog_ids": episode_service.list_episode_rawlog_ids(episode.episode_id),
+            "metadata": metadata or None,
+        }
+    )
 
 
 @router.post("", response_model=EpisodeRead, status_code=status.HTTP_201_CREATED)
