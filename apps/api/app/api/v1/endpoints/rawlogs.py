@@ -3,10 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.db.repositories.rawlog_repository import RawLogRepository
 from app.db.repositories.session_repository import SessionRepository
+from app.db.repositories.turn_repository import TurnRepository
 from app.db.session import get_db
 from app.schemas.rawlog import RawLogCreate, RawLogRead
 from app.services.rawlog_service import RawLogService
 from app.services.session_service import SessionService
+from app.services.turn_service import TurnService
 
 router = APIRouter()
 
@@ -15,6 +17,7 @@ router = APIRouter()
 def create_rawlog(payload: RawLogCreate, db: Session = Depends(get_db)) -> RawLogRead:
     session_service = SessionService(SessionRepository(db))
     rawlog_service = RawLogService(RawLogRepository(db), session_service)
+    turn_service = TurnService(TurnRepository(db), rawlog_service)
 
     try:
         rawlog = rawlog_service.create_rawlog(
@@ -28,6 +31,8 @@ def create_rawlog(payload: RawLogCreate, db: Session = Depends(get_db)) -> RawLo
             source_model=payload.source_model,
             metadata=payload.metadata,
         )
+        if rawlog.speaker_type == "assistant":
+            turn_service.build_from_session(rawlog.session_id)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:

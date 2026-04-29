@@ -22,6 +22,12 @@ class RawLogRepository:
         )
         return list(self.db.execute(stmt).scalars().all())
 
+    def list_by_ids(self, rawlog_ids: list[str]) -> list[RawLog]:
+        if not rawlog_ids:
+            return []
+        stmt = select(RawLog).where(RawLog.rawlog_id.in_(rawlog_ids))
+        return list(self.db.execute(stmt).scalars().all())
+
     def get_latest_for_session(self, session_id: str) -> RawLog | None:
         stmt = (
             select(RawLog)

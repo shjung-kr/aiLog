@@ -47,6 +47,9 @@ class RawLogService:
         self.session_service.require_session(session_id)
         return self.rawlog_repository.list_by_session_id(session_id)
 
+    def list_rawlogs_by_ids(self, rawlog_ids: list[str]) -> list[RawLog]:
+        return self.rawlog_repository.list_by_ids(rawlog_ids)
+
     def get_next_sequence_no(self, session_id: str) -> int:
         self.session_service.require_session(session_id)
         return self.rawlog_repository.get_next_sequence_no(session_id)

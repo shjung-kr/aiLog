@@ -2,6 +2,7 @@ from app.llm.client import LLMClient
 from app.schemas.chat import ChatMessageCreate
 from app.services.rawlog_service import RawLogService
 from app.services.session_service import SessionService
+from app.services.turn_service import TurnService
 from app.utils.datetime import utc_now
 
 
@@ -11,10 +12,12 @@ class ChatService:
         session_service: SessionService,
         rawlog_service: RawLogService,
         llm_client: LLMClient,
+        turn_service: TurnService | None = None,
     ) -> None:
         self.session_service = session_service
         self.rawlog_service = rawlog_service
         self.llm_client = llm_client
+        self.turn_service = turn_service
 
     def send_message(self, payload: ChatMessageCreate):
         session_id = payload.session_id
@@ -46,4 +49,6 @@ class ChatService:
             source_model=source_model,
             reply_to_rawlog_id=user_message.rawlog_id,
         )
+        if self.turn_service is not None:
+            self.turn_service.create_from_pair(user_message, assistant_message)
         return session_id, user_message, assistant_message

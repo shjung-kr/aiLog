@@ -28,6 +28,7 @@ class Settings:
     database_url = os.getenv("DATABASE_URL", "sqlite:///./ailog.db")
     openai_api_key = os.getenv("OPENAI_API_KEY", "")
     openai_model = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
+    episode_idle_seconds = int(os.getenv("EPISODE_IDLE_SECONDS", "60"))
 
 
 settings = Settings()
