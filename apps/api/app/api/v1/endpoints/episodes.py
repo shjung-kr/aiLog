@@ -17,6 +17,15 @@ from app.services.turn_service import TurnService
 
 router = APIRouter()
 
+SEMANTIC_METADATA_FIELDS = (
+    "user_goal",
+    "context",
+    "decision_or_insight",
+    "emotional_or_situational_cue",
+    "representative_snippets",
+    "semantic_text",
+)
+
 
 def _build_service(db: Session) -> EpisodeService:
     session_service = SessionService(SessionRepository(db))
@@ -42,6 +51,19 @@ def _serialize_episode(episode_service: EpisodeService, episode: Episode) -> Epi
     )
 
 
+def _episode_create_metadata(payload: EpisodeCreate) -> dict | None:
+    metadata = dict(payload.metadata or {})
+    for field in SEMANTIC_METADATA_FIELDS:
+        value = getattr(payload, field)
+        if isinstance(value, str) and value.strip():
+            metadata[field] = value.strip()
+        elif isinstance(value, list):
+            cleaned = [str(entry).strip() for entry in value if str(entry).strip()]
+            if cleaned:
+                metadata[field] = cleaned
+    return metadata or None
+
+
 @router.post("", response_model=EpisodeRead, status_code=status.HTTP_201_CREATED)
 def create_episode(payload: EpisodeCreate, db: Session = Depends(get_db)) -> EpisodeRead:
     episode_service = _build_service(db)
@@ -55,7 +77,7 @@ def create_episode(payload: EpisodeCreate, db: Session = Depends(get_db)) -> Epi
             importance_score=payload.importance_score,
             source_session_id=payload.source_session_id,
             keywords=payload.keywords,
-            metadata=payload.metadata,
+            metadata=_episode_create_metadata(payload),
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

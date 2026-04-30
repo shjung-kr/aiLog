@@ -1,6 +1,7 @@
 import type {
   ChatMessageRequest,
   ChatMessageResponse,
+  EpisodeListResponse,
   RawLogCreateRequest,
   RawLogResponse,
   SessionCreateRequest,
@@ -56,4 +57,12 @@ export function sendChatMessage(payload: ChatMessageRequest): Promise<ChatMessag
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+export function getEpisodes(sourceSessionId?: string, limit = 50): Promise<EpisodeListResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (sourceSessionId) {
+    params.set('source_session_id', sourceSessionId);
+  }
+  return request<EpisodeListResponse>(`/api/v1/episodes?${params.toString()}`);
 }

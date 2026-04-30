@@ -101,15 +101,24 @@ class LLMClient:
                 "You are aiLog's semantic episode builder. "
                 "Read conversation turns and group turns that share the same user goal, topic, problem, or context. "
                 "Do not group by connective words alone. Do not copy full conversation text into summaries. "
+                "Separate display metadata from embedding evidence. "
+                "title, summary, keywords, and episode_type are for UI and coarse filtering. "
+                "semantic_text is for embedding, search, and merge decisions. It must describe the user's goal, "
+                "context, insight, situational cue, and short representative evidence without becoming a label list. "
                 "Return JSON only with this shape: "
                 "{\"episodes\":[{\"title\":\"...\",\"summary\":\"...\",\"episode_type\":\"topic\","
                 "\"emotion_signal\":null,\"importance_score\":0.0,\"keywords\":[\"...\"],"
+                "\"user_goal\":\"...\",\"context\":\"...\",\"decision_or_insight\":\"...\","
+                "\"emotional_or_situational_cue\":null,\"representative_snippets\":[\"...\"],"
+                "\"semantic_text\":\"...\","
                 "\"rawlog_ids\":[\"...\"]}]}. "
                 "Each rawlog_id must come from the provided turns. Preserve source rawlog_ids exactly."
             ),
             input=(
                 "Build semantic episodes from these turns. "
-                "A summary should describe the shared context in one concise sentence, not reproduce the dialog.\n\n"
+                "A summary should describe the shared context in one concise sentence, not reproduce the dialog. "
+                "semantic_text should be richer than the summary and should be optimized for later natural-language "
+                "recall queries such as vague references, remembered situations, or prior insights.\n\n"
                 f"{json.dumps({'turns': turns}, ensure_ascii=False)}"
             ),
         )

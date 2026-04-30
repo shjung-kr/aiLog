@@ -7,11 +7,21 @@ from app.services.episode_service import EpisodeService
 from app.services.rawlog_service import RawLogService
 from app.services.turn_service import TurnService
 
-EMBEDDING_MERGE_THRESHOLD = 0.34
+EMBEDDING_MERGE_THRESHOLD = 0.74
+MIN_EMBEDDING_COSINE_FOR_MERGE = 0.68
 FALLBACK_MERGE_SIMILARITY_THRESHOLD = 0.16
 EMBEDDING_METADATA_KEY = "semantic_embedding"
 EMBEDDING_MODEL_METADATA_KEY = "semantic_embedding_model"
 SEMANTIC_TEXT_METADATA_KEY = "semantic_text"
+EMBEDDING_SOURCE_VERSION_METADATA_KEY = "embedding_source_version"
+EMBEDDING_SOURCE_VERSION = "episode_semantic_evidence_v1"
+SEMANTIC_DETAIL_KEYS = (
+    "user_goal",
+    "context",
+    "decision_or_insight",
+    "emotional_or_situational_cue",
+    "representative_snippets",
+)
 STOPWORDS = {
     "turn",
     "사용자",
@@ -101,11 +111,20 @@ class EpisodeBuilderService:
             summary = str(item.get("summary") or "Semantic episode generated from conversation turns.")
             episode_type = str(item.get("episode_type") or "topic")
             keywords = item.get("keywords") if isinstance(item.get("keywords"), list) else None
+            semantic_text = self._semantic_text_from_item(
+                item=item,
+                title=title,
+                summary=summary,
+                keywords=keywords,
+            )
+            semantic_metadata = self._semantic_metadata_from_item(item, semantic_text)
             matching_episode = self._find_matching_episode(
                 existing_episodes=existing_episodes,
                 title=title,
                 summary=summary,
+                episode_type=episode_type,
                 keywords=keywords,
+                semantic_text=semantic_text,
             )
             if matching_episode is None:
                 episode = self.episode_service.create_episode(
@@ -120,6 +139,7 @@ class EpisodeBuilderService:
                     metadata={
                         "builder": "llm_episode_builder_v1",
                         "episode_scope": "cross_session_semantic",
+                        **semantic_metadata,
                     },
                 )
                 self._store_episode_embedding(episode)
@@ -139,6 +159,7 @@ class EpisodeBuilderService:
                         "episode_scope": "cross_session_semantic",
                         "merge_similarity": self._last_match_score,
                         "merge_similarity_method": self._last_match_method,
+                        **semantic_metadata,
                     },
                 )
                 self._store_episode_embedding(episode)
@@ -151,24 +172,34 @@ class EpisodeBuilderService:
         existing_episodes: list[Episode],
         title: str,
         summary: str,
+        episode_type: str,
         keywords: list[str] | None,
+        semantic_text: str,
     ) -> Episode | None:
         self._last_match_score = 0.0
         self._last_match_method = None
-        candidate_text = self._semantic_text(title=title, summary=summary, keywords=keywords)
         try:
-            candidate_embedding = self.llm_client.embed_texts([candidate_text])[0]
+            candidate_embedding = self.llm_client.embed_texts([semantic_text])[0]
             best_episode = None
             best_score = 0.0
             for episode in existing_episodes:
                 episode_embedding = self._ensure_episode_embedding(episode)
-                score = self._cosine_similarity(candidate_embedding, episode_embedding)
+                cosine_score = self._cosine_similarity(candidate_embedding, episode_embedding)
+                if cosine_score < MIN_EMBEDDING_COSINE_FOR_MERGE:
+                    continue
+                score = self._merge_score(
+                    embedding_cosine=cosine_score,
+                    left_keywords=episode.keywords,
+                    right_keywords=keywords,
+                    left_episode_type=episode.episode_type,
+                    right_episode_type=episode_type,
+                )
                 if score > best_score:
                     best_score = score
                     best_episode = episode
 
             self._last_match_score = best_score
-            self._last_match_method = "embedding_cosine"
+            self._last_match_method = "semantic_embedding_hybrid"
             if best_score < EMBEDDING_MERGE_THRESHOLD:
                 return None
             return best_episode
@@ -209,21 +240,26 @@ class EpisodeBuilderService:
         return best_episode
 
     def _store_episode_embedding(self, episode: Episode) -> None:
-        text = self._semantic_text(title=episode.title, summary=episode.summary, keywords=episode.keywords)
+        text = self._episode_semantic_text(episode)
         embedding = self.llm_client.embed_texts([text])[0]
         episode.metadata_json = {
             **(episode.metadata_json or {}),
             SEMANTIC_TEXT_METADATA_KEY: text,
             EMBEDDING_METADATA_KEY: embedding,
             EMBEDDING_MODEL_METADATA_KEY: getattr(self.llm_client, "embedding_model", None),
+            EMBEDDING_SOURCE_VERSION_METADATA_KEY: EMBEDDING_SOURCE_VERSION,
         }
         self.episode_service.update_episode(episode)
 
     def _ensure_episode_embedding(self, episode: Episode) -> list[float]:
         metadata = episode.metadata_json or {}
         embedding = metadata.get(EMBEDDING_METADATA_KEY)
-        semantic_text = self._semantic_text(title=episode.title, summary=episode.summary, keywords=episode.keywords)
-        if isinstance(embedding, list) and metadata.get(SEMANTIC_TEXT_METADATA_KEY) == semantic_text:
+        semantic_text = self._episode_semantic_text(episode)
+        if (
+            isinstance(embedding, list)
+            and metadata.get(SEMANTIC_TEXT_METADATA_KEY) == semantic_text
+            and metadata.get(EMBEDDING_SOURCE_VERSION_METADATA_KEY) == EMBEDDING_SOURCE_VERSION
+        ):
             return [float(value) for value in embedding]
 
         embedding = self.llm_client.embed_texts([semantic_text])[0]
@@ -232,9 +268,68 @@ class EpisodeBuilderService:
             SEMANTIC_TEXT_METADATA_KEY: semantic_text,
             EMBEDDING_METADATA_KEY: embedding,
             EMBEDDING_MODEL_METADATA_KEY: getattr(self.llm_client, "embedding_model", None),
+            EMBEDDING_SOURCE_VERSION_METADATA_KEY: EMBEDDING_SOURCE_VERSION,
         }
         self.episode_service.update_episode(episode)
         return embedding
+
+    def _episode_semantic_text(self, episode: Episode) -> str:
+        metadata = episode.metadata_json or {}
+        semantic_text = metadata.get(SEMANTIC_TEXT_METADATA_KEY)
+        if isinstance(semantic_text, str) and semantic_text.strip():
+            return semantic_text.strip()
+        return self._semantic_text(title=episode.title, summary=episode.summary, keywords=episode.keywords)
+
+    def _semantic_text_from_item(
+        self,
+        item: dict,
+        title: str,
+        summary: str,
+        keywords: list[str] | None,
+    ) -> str:
+        semantic_text = item.get(SEMANTIC_TEXT_METADATA_KEY)
+        if isinstance(semantic_text, str) and semantic_text.strip():
+            return semantic_text.strip()
+
+        lines = []
+        labels = {
+            "user_goal": "User goal",
+            "context": "Context",
+            "decision_or_insight": "Decision or insight",
+            "emotional_or_situational_cue": "Emotional or situational cue",
+            "representative_snippets": "Representative snippets",
+        }
+        for key in SEMANTIC_DETAIL_KEYS:
+            value = item.get(key)
+            text = self._metadata_value_text(value)
+            if text:
+                lines.append(f"{labels[key]}: {text}")
+
+        if lines:
+            return "\n".join(lines)
+        return self._semantic_text(title=title, summary=summary, keywords=keywords)
+
+    def _semantic_metadata_from_item(self, item: dict, semantic_text: str) -> dict:
+        metadata = {
+            SEMANTIC_TEXT_METADATA_KEY: semantic_text,
+            EMBEDDING_SOURCE_VERSION_METADATA_KEY: EMBEDDING_SOURCE_VERSION,
+        }
+        for key in SEMANTIC_DETAIL_KEYS:
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                metadata[key] = value.strip()
+            elif isinstance(value, list):
+                cleaned = [str(entry).strip() for entry in value if str(entry).strip()]
+                if cleaned:
+                    metadata[key] = cleaned
+        return metadata
+
+    def _metadata_value_text(self, value: object) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        if isinstance(value, list):
+            return " | ".join(str(entry).strip() for entry in value if str(entry).strip())
+        return ""
 
     def _semantic_text(self, title: str, summary: str, keywords: list[str] | None) -> str:
         keyword_text = ", ".join(str(keyword) for keyword in keywords or [])
@@ -255,6 +350,18 @@ class EpisodeBuilderService:
         if left_norm == 0 or right_norm == 0:
             return 0.0
         return dot / (left_norm * right_norm)
+
+    def _merge_score(
+        self,
+        embedding_cosine: float,
+        left_keywords: list[str] | None,
+        right_keywords: list[str] | None,
+        left_episode_type: str,
+        right_episode_type: str,
+    ) -> float:
+        keyword_score = self._jaccard(self._keyword_set(left_keywords), self._keyword_set(right_keywords))
+        type_score = 1.0 if left_episode_type.strip() == right_episode_type.strip() else 0.0
+        return (embedding_cosine * 0.8) + (keyword_score * 0.1) + (type_score * 0.1)
 
     def _episode_similarity(
         self,

@@ -46,16 +46,19 @@ export default function SessionChatPage() {
       <section style={styles.shell}>
         <header style={styles.header}>
           <div>
-            <p style={styles.eyebrow}>Session View</p>
-            <h1 style={styles.title}>Stored rawlog conversation</h1>
+            <p style={styles.eyebrow}>RawLog Session</p>
+            <h1 style={styles.title}>Stored conversation logs.</h1>
             <p style={styles.sessionId}>{sessionId}</p>
           </div>
           <div style={styles.links}>
             <Link href="/sessions" style={styles.secondaryLink}>
-              All Sessions
+              Sessions
+            </Link>
+            <Link href="/episodes" style={styles.secondaryLink}>
+              Episodes
             </Link>
             <Link href="/chat" style={styles.primaryLink}>
-              Back To Chat
+              Chat
             </Link>
           </div>
         </header>
@@ -63,21 +66,28 @@ export default function SessionChatPage() {
         <p style={styles.status}>{status}</p>
 
         <section style={styles.messages}>
-          {messages.map((message) => (
-            <article
-              key={message.rawlog_id}
-              style={{
-                ...styles.messageCard,
-                ...(message.speaker_type === 'user' ? styles.userCard : styles.assistantCard),
-              }}
-            >
-              <div style={styles.messageMeta}>
-                <span>{message.speaker_type}</span>
-                <span>#{message.sequence_no}</span>
-              </div>
-              <p style={styles.messageText}>{message.content}</p>
+          {messages.length === 0 ? (
+            <article style={styles.emptyCard}>
+              <p style={styles.emptyText}>No RawLogs stored for this session.</p>
             </article>
-          ))}
+          ) : (
+            messages.map((message) => (
+              <article key={message.rawlog_id} style={styles.messageCard}>
+                <div style={styles.messageMeta}>
+                  <span style={message.speaker_type === 'user' ? styles.userBadge : styles.assistantBadge}>
+                    {message.speaker_type}
+                  </span>
+                  <span>#{message.sequence_no}</span>
+                  <span>{new Date(message.occurred_at).toLocaleString()}</span>
+                </div>
+                <p style={styles.messageText}>{message.content}</p>
+                <div style={styles.rawlogMeta}>
+                  <span>{message.message_type || 'message'}</span>
+                  <span>{message.rawlog_id}</span>
+                </div>
+              </article>
+            ))
+          )}
         </section>
       </section>
     </main>
@@ -87,13 +97,13 @@ export default function SessionChatPage() {
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)',
-    color: '#f9fafb',
+    background: '#f7f7f5',
+    color: '#1f2937',
     padding: '32px 20px',
-    fontFamily: 'Georgia, "Times New Roman", serif',
+    fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
   shell: {
-    maxWidth: '920px',
+    maxWidth: '960px',
     margin: '0 auto',
     display: 'grid',
     gap: '18px',
@@ -102,78 +112,114 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     gap: '16px',
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
     flexWrap: 'wrap',
   },
   eyebrow: {
     margin: 0,
     textTransform: 'uppercase',
-    letterSpacing: '0.18em',
+    letterSpacing: '0.08em',
     fontSize: '12px',
-    color: '#fbbf24',
+    color: '#475569',
   },
   title: {
-    margin: '8px 0',
-    fontSize: 'clamp(2rem, 5vw, 3.4rem)',
-    lineHeight: 1,
+    margin: '8px 0 0',
+    fontSize: '32px',
+    lineHeight: 1.1,
   },
   sessionId: {
-    margin: 0,
-    color: '#cbd5e1',
+    margin: '10px 0 0',
+    color: '#64748b',
+    fontSize: '13px',
     wordBreak: 'break-all',
   },
   links: {
     display: 'flex',
-    gap: '12px',
+    gap: '10px',
     flexWrap: 'wrap',
   },
   primaryLink: {
     textDecoration: 'none',
-    padding: '12px 18px',
-    borderRadius: '999px',
-    background: '#fbbf24',
-    color: '#111827',
+    padding: '10px 14px',
+    borderRadius: '8px',
+    background: '#111827',
+    color: '#ffffff',
   },
   secondaryLink: {
     textDecoration: 'none',
-    padding: '12px 18px',
-    borderRadius: '999px',
-    border: '1px solid rgba(255,255,255,0.2)',
-    color: '#f9fafb',
+    padding: '10px 14px',
+    borderRadius: '8px',
+    border: '1px solid #d1d5db',
+    color: '#111827',
   },
   status: {
     margin: 0,
-    color: '#cbd5e1',
+    color: '#475569',
   },
   messages: {
     display: 'grid',
     gap: '12px',
   },
+  emptyCard: {
+    padding: '16px',
+    borderRadius: '8px',
+    background: '#ffffff',
+    border: '1px solid #e5e7eb',
+  },
+  emptyText: {
+    margin: 0,
+    color: '#64748b',
+  },
   messageCard: {
-    borderRadius: '20px',
-    padding: '16px 18px',
-    border: '1px solid rgba(255,255,255,0.08)',
-  },
-  userCard: {
-    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(120, 53, 15, 0.35))',
-  },
-  assistantCard: {
-    background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(55, 65, 81, 0.88))',
+    display: 'grid',
+    gap: '10px',
+    borderRadius: '8px',
+    padding: '16px',
+    background: '#ffffff',
+    border: '1px solid #e5e7eb',
   },
   messageMeta: {
     display: 'flex',
-    justifyContent: 'space-between',
-    gap: '12px',
+    alignItems: 'center',
+    gap: '10px',
+    flexWrap: 'wrap',
     fontSize: '12px',
     textTransform: 'uppercase',
-    letterSpacing: '0.12em',
-    color: '#cbd5e1',
-    marginBottom: '10px',
+    letterSpacing: '0.06em',
+    color: '#64748b',
+  },
+  userBadge: {
+    borderRadius: '999px',
+    padding: '4px 8px',
+    background: '#dcfce7',
+    color: '#166534',
+    fontSize: '12px',
+    letterSpacing: 0,
+    textTransform: 'none',
+  },
+  assistantBadge: {
+    borderRadius: '999px',
+    padding: '4px 8px',
+    background: '#e0f2fe',
+    color: '#075985',
+    fontSize: '12px',
+    letterSpacing: 0,
+    textTransform: 'none',
   },
   messageText: {
     margin: 0,
     whiteSpace: 'pre-wrap',
     lineHeight: 1.6,
     fontSize: '16px',
+    color: '#334155',
+  },
+  rawlogMeta: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: '12px',
+    flexWrap: 'wrap',
+    color: '#64748b',
+    fontSize: '12px',
+    wordBreak: 'break-all',
   },
 };

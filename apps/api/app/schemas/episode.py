@@ -12,6 +12,12 @@ class EpisodeCreate(BaseModel):
     importance_score: float | None = None
     source_session_id: str | None = None
     keywords: list[str] | None = None
+    user_goal: str | None = None
+    context: str | None = None
+    decision_or_insight: str | None = None
+    emotional_or_situational_cue: str | None = None
+    representative_snippets: list[str] | None = None
+    semantic_text: str | None = None
     metadata: dict | None = None
 
 

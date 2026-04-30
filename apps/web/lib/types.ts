@@ -54,10 +54,40 @@ export type ChatMessageRequest = {
   user_id?: string;
   title?: string;
   content: string;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type ChatMessageResponse = {
   session_id: string;
   user_message: RawLogResponse;
   assistant_message: RawLogResponse;
+  sources: Array<{
+    title?: string | null;
+    url: string;
+  }>;
+  context_used: Array<{
+    episode_id: string;
+    title: string;
+    score: number;
+    rawlog_ids: string[];
+  }>;
 };
+
+export type EpisodeResponse = {
+  episode_id: string;
+  title: string;
+  summary: string;
+  episode_type: string;
+  start_rawlog_id: string;
+  end_rawlog_id: string;
+  start_at: string;
+  end_at: string;
+  emotion_signal: string | null;
+  importance_score: number | null;
+  source_session_id: string | null;
+  keywords: string[] | null;
+  rawlog_ids: string[];
+  metadata: Record<string, unknown> | null;
+};
+
+export type EpisodeListResponse = EpisodeResponse[];
