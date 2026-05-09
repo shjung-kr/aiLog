@@ -3,6 +3,12 @@ from math import sqrt
 
 from app.db.models.episode import Episode
 from app.llm.client import LLMClient
+from app.pipeline.episode.episode_builder import (
+    EMBEDDING_SOURCE_VERSION,
+    EMBEDDING_SOURCE_VERSION_METADATA_KEY,
+    SEMANTIC_TEXT_METADATA_KEY,
+    EpisodeBuilder,
+)
 from app.services.episode_service import EpisodeService
 from app.services.rawlog_service import RawLogService
 from app.services.turn_service import TurnService
@@ -12,16 +18,6 @@ MIN_EMBEDDING_COSINE_FOR_MERGE = 0.68
 FALLBACK_MERGE_SIMILARITY_THRESHOLD = 0.16
 EMBEDDING_METADATA_KEY = "semantic_embedding"
 EMBEDDING_MODEL_METADATA_KEY = "semantic_embedding_model"
-SEMANTIC_TEXT_METADATA_KEY = "semantic_text"
-EMBEDDING_SOURCE_VERSION_METADATA_KEY = "embedding_source_version"
-EMBEDDING_SOURCE_VERSION = "episode_semantic_evidence_v1"
-SEMANTIC_DETAIL_KEYS = (
-    "user_goal",
-    "context",
-    "decision_or_insight",
-    "emotional_or_situational_cue",
-    "representative_snippets",
-)
 STOPWORDS = {
     "turn",
     "사용자",
@@ -65,6 +61,7 @@ class EpisodeBuilderService:
         self.turn_service = turn_service
         self.rawlog_service = rawlog_service
         self.llm_client = llm_client
+        self.episode_builder = EpisodeBuilder(llm_client)
         self._last_match_score = 0.0
         self._last_match_method: str | None = None
 
@@ -100,46 +97,32 @@ class EpisodeBuilderService:
             self.episode_service.clear_session_episodes(session_id)
 
         valid_rawlog_ids = {rawlog.rawlog_id for rawlog in rawlogs}
-        built_episodes = self.llm_client.build_episodes(llm_turns)
+        built_episodes = self.episode_builder.build(llm_turns=llm_turns, valid_rawlog_ids=valid_rawlog_ids)
         episodes: list[Episode] = []
         existing_episodes = self.episode_service.list_all_episodes(limit=300)
         for item in built_episodes:
-            rawlog_ids = [rawlog_id for rawlog_id in item.get("rawlog_ids", []) if rawlog_id in valid_rawlog_ids]
-            if not rawlog_ids:
-                continue
-            title = str(item.get("title") or "Untitled episode")
-            summary = str(item.get("summary") or "Semantic episode generated from conversation turns.")
-            episode_type = str(item.get("episode_type") or "topic")
-            keywords = item.get("keywords") if isinstance(item.get("keywords"), list) else None
-            semantic_text = self._semantic_text_from_item(
-                item=item,
-                title=title,
-                summary=summary,
-                keywords=keywords,
-            )
-            semantic_metadata = self._semantic_metadata_from_item(item, semantic_text)
             matching_episode = self._find_matching_episode(
                 existing_episodes=existing_episodes,
-                title=title,
-                summary=summary,
-                episode_type=episode_type,
-                keywords=keywords,
-                semantic_text=semantic_text,
+                title=item.title,
+                summary=item.summary,
+                episode_type=item.episode_type,
+                keywords=item.keywords,
+                semantic_text=item.semantic_text,
             )
             if matching_episode is None:
                 episode = self.episode_service.create_episode(
-                    title=title,
-                    summary=summary,
-                    episode_type=episode_type,
-                    rawlog_ids=rawlog_ids,
-                    emotion_signal=item.get("emotion_signal"),
-                    importance_score=item.get("importance_score"),
+                    title=item.title,
+                    summary=item.summary,
+                    episode_type=item.episode_type,
+                    rawlog_ids=item.rawlog_ids,
+                    emotion_signal=item.emotion_signal,
+                    importance_score=item.importance_score,
                     source_session_id=session_id,
-                    keywords=keywords,
+                    keywords=item.keywords,
                     metadata={
                         "builder": "llm_episode_builder_v1",
                         "episode_scope": "cross_session_semantic",
-                        **semantic_metadata,
+                        **item.metadata,
                     },
                 )
                 self._store_episode_embedding(episode)
@@ -147,19 +130,19 @@ class EpisodeBuilderService:
             else:
                 episode = self.episode_service.merge_episode(
                     episode=matching_episode,
-                    title=title,
-                    summary=summary,
-                    episode_type=episode_type,
-                    rawlog_ids=rawlog_ids,
-                    emotion_signal=item.get("emotion_signal"),
-                    importance_score=item.get("importance_score"),
-                    keywords=keywords,
+                    title=item.title,
+                    summary=item.summary,
+                    episode_type=item.episode_type,
+                    rawlog_ids=item.rawlog_ids,
+                    emotion_signal=item.emotion_signal,
+                    importance_score=item.importance_score,
+                    keywords=item.keywords,
                     metadata={
                         "builder": "llm_episode_builder_v1",
                         "episode_scope": "cross_session_semantic",
                         "merge_similarity": self._last_match_score,
                         "merge_similarity_method": self._last_match_method,
-                        **semantic_metadata,
+                        **item.metadata,
                     },
                 )
                 self._store_episode_embedding(episode)
@@ -279,57 +262,6 @@ class EpisodeBuilderService:
         if isinstance(semantic_text, str) and semantic_text.strip():
             return semantic_text.strip()
         return self._semantic_text(title=episode.title, summary=episode.summary, keywords=episode.keywords)
-
-    def _semantic_text_from_item(
-        self,
-        item: dict,
-        title: str,
-        summary: str,
-        keywords: list[str] | None,
-    ) -> str:
-        semantic_text = item.get(SEMANTIC_TEXT_METADATA_KEY)
-        if isinstance(semantic_text, str) and semantic_text.strip():
-            return semantic_text.strip()
-
-        lines = []
-        labels = {
-            "user_goal": "User goal",
-            "context": "Context",
-            "decision_or_insight": "Decision or insight",
-            "emotional_or_situational_cue": "Emotional or situational cue",
-            "representative_snippets": "Representative snippets",
-        }
-        for key in SEMANTIC_DETAIL_KEYS:
-            value = item.get(key)
-            text = self._metadata_value_text(value)
-            if text:
-                lines.append(f"{labels[key]}: {text}")
-
-        if lines:
-            return "\n".join(lines)
-        return self._semantic_text(title=title, summary=summary, keywords=keywords)
-
-    def _semantic_metadata_from_item(self, item: dict, semantic_text: str) -> dict:
-        metadata = {
-            SEMANTIC_TEXT_METADATA_KEY: semantic_text,
-            EMBEDDING_SOURCE_VERSION_METADATA_KEY: EMBEDDING_SOURCE_VERSION,
-        }
-        for key in SEMANTIC_DETAIL_KEYS:
-            value = item.get(key)
-            if isinstance(value, str) and value.strip():
-                metadata[key] = value.strip()
-            elif isinstance(value, list):
-                cleaned = [str(entry).strip() for entry in value if str(entry).strip()]
-                if cleaned:
-                    metadata[key] = cleaned
-        return metadata
-
-    def _metadata_value_text(self, value: object) -> str:
-        if isinstance(value, str):
-            return value.strip()
-        if isinstance(value, list):
-            return " | ".join(str(entry).strip() for entry in value if str(entry).strip())
-        return ""
 
     def _semantic_text(self, title: str, summary: str, keywords: list[str] | None) -> str:
         keyword_text = ", ".join(str(keyword) for keyword in keywords or [])
