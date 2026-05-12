@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.episode import Episode
 from app.db.repositories.episode_repository import EpisodeRepository
+from app.db.repositories.gist_repository import GistRepository
 from app.db.repositories.rawlog_repository import RawLogRepository
 from app.db.repositories.session_repository import SessionRepository
 from app.db.repositories.turn_repository import TurnRepository
@@ -11,6 +12,7 @@ from app.llm.client import LLMClient
 from app.schemas.episode import EpisodeBuildRequest, EpisodeCreate, EpisodeRead
 from app.services.episode_builder_service import EpisodeBuilderService
 from app.services.episode_service import EpisodeService
+from app.services.gist_service import GistService
 from app.services.rawlog_service import RawLogService
 from app.services.session_service import SessionService
 from app.services.turn_service import TurnService
@@ -117,11 +119,15 @@ def build_episodes_from_session(
     episode_service = _build_service(db)
     turn_service = _build_turn_service(db)
     rawlog_service = turn_service.rawlog_service
+    llm_client = LLMClient()
+    gist_service = GistService(GistRepository(db), rawlog_service, turn_service, llm_client)
+    gist_service.generate_for_session(session_id)
     builder = EpisodeBuilderService(
         episode_service=episode_service,
         turn_service=turn_service,
         rawlog_service=rawlog_service,
-        llm_client=LLMClient(),
+        llm_client=llm_client,
+        gist_service=gist_service,
     )
 
     try:

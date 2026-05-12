@@ -31,6 +31,39 @@ class EpisodeBuilder:
     def __init__(self, llm_client: LLMClient) -> None:
         self.llm_client = llm_client
 
+    def build_from_gists(self, gist_segments: list[dict], valid_rawlog_ids: set[str]) -> list[BuiltEpisode]:
+        if not gist_segments:
+            return []
+
+        episodes: list[BuiltEpisode] = []
+        for item in self.llm_client.build_episodes_from_gists(gist_segments):
+            rawlog_ids = [rid for rid in item.get("rawlog_ids", []) if rid in valid_rawlog_ids]
+            if not rawlog_ids:
+                continue
+
+            title = str(item.get("title") or "Untitled episode").strip()
+            summary = str(item.get("summary") or "Semantic episode generated from gists.").strip()
+            episode_type = str(item.get("episode_type") or "topic").strip()
+            keywords = item.get("keywords") if isinstance(item.get("keywords"), list) else None
+            semantic_text = self._semantic_text_from_item(item=item, title=title, summary=summary, keywords=keywords)
+            metadata = self._semantic_metadata_from_item(item, semantic_text)
+
+            episodes.append(
+                BuiltEpisode(
+                    title=title,
+                    summary=summary,
+                    episode_type=episode_type,
+                    rawlog_ids=rawlog_ids,
+                    emotion_signal=item.get("emotion_signal"),
+                    importance_score=item.get("importance_score"),
+                    keywords=keywords,
+                    semantic_text=semantic_text,
+                    metadata=metadata,
+                )
+            )
+
+        return episodes
+
     def build(self, llm_turns: list[dict], valid_rawlog_ids: set[str]) -> list[BuiltEpisode]:
         if not llm_turns:
             return []

@@ -94,6 +94,25 @@ class LLMClient:
 
         return sources
 
+    def merge_semantic_text(self, text_a: str, text_b: str) -> str:
+        response = self.client.responses.create(
+            model=self.model,
+            instructions=(
+                "You are aiLog's episode semantic text merger. "
+                "Given two semantic texts from two related episodes being merged, "
+                "synthesize a single semantic text that captures the shared theme, "
+                "combined user goals, decisions, and key context from both. "
+                "Be dense and precise. Synthesize — do not list or concatenate. "
+                "Write in the same language as the input. If the input is Korean, respond in Korean. "
+                "Return only the merged semantic text, no JSON, no labels, no preamble."
+            ),
+            input=f"Merge these two episode semantic texts into one:\n\nA:\n{text_a}\n\nB:\n{text_b}",
+        )
+        result = (response.output_text or "").strip()
+        if not result:
+            raise RuntimeError("OpenAI returned empty merged semantic text")
+        return result
+
     def build_episodes(self, turns: list[dict]) -> list[dict]:
         response = self.client.responses.create(
             model=self.model,
@@ -105,6 +124,8 @@ class LLMClient:
                 "title, summary, keywords, and episode_type are for UI and coarse filtering. "
                 "semantic_text is for embedding, search, and merge decisions. It must describe the user's goal, "
                 "context, insight, situational cue, and short representative evidence without becoming a label list. "
+                "Write all text fields in the same language as the conversation. If the conversation is in Korean, "
+                "write title, summary, keywords, semantic_text, and all other text fields in Korean. "
                 "Return JSON only with this shape: "
                 "{\"episodes\":[{\"title\":\"...\",\"summary\":\"...\",\"episode_type\":\"topic\","
                 "\"emotion_signal\":null,\"importance_score\":0.0,\"keywords\":[\"...\"],"
@@ -125,6 +146,78 @@ class LLMClient:
         content = (response.output_text or "").strip()
         if not content:
             raise RuntimeError("OpenAI returned an empty episode build response")
+        return self._parse_episode_json(content)
+
+    def build_gist(self, segment_turns: list[dict]) -> dict:
+        response = self.client.responses.create(
+            model=self.model,
+            instructions=(
+                "You are aiLog's semantic gist extractor. "
+                "Given conversation turns, produce a compact semantic summary capturing what the user was trying "
+                "to accomplish, what was decided or learned, and key context. "
+                "Do not reproduce dialogue. Be dense and precise. "
+                "Write all text fields in the same language as the conversation. "
+                "If the conversation is in Korean, write title, gist_text, topic, and intent in Korean. "
+                "Return JSON only: "
+                "{\"title\": \"...\", \"gist_text\": \"...\", \"topic\": \"...\", "
+                "\"intent\": \"...\", \"confidence\": 0.0}"
+            ),
+            input=(
+                "Extract a gist from these conversation turns:\n\n"
+                f"{json.dumps({'turns': segment_turns}, ensure_ascii=False)}"
+            ),
+        )
+        content = (response.output_text or "").strip()
+        if not content:
+            raise RuntimeError("OpenAI returned an empty gist response")
+        return self._parse_gist_json(content)
+
+    def _parse_gist_json(self, content: str) -> dict:
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            start = content.find("{")
+            end = content.rfind("}")
+            if start < 0 or end < start:
+                raise RuntimeError("OpenAI did not return valid JSON for gist") from None
+            data = json.loads(content[start : end + 1])
+        if not isinstance(data, dict):
+            raise RuntimeError("Gist JSON must be an object")
+        return data
+
+    def build_episodes_from_gists(self, gist_segments: list[dict]) -> list[dict]:
+        response = self.client.responses.create(
+            model=self.model,
+            instructions=(
+                "You are aiLog's semantic episode builder. "
+                "Read gist segments — each is a compressed summary of a conversation chunk — "
+                "and group gists that share the same user goal, topic, problem, or context into episodes. "
+                "Do not group by connective words alone. "
+                "title, summary, keywords, and episode_type are for UI and coarse filtering. "
+                "semantic_text is for embedding and recall. It must describe the user's goal, "
+                "context, insight, situational cue, and short representative evidence without being a label list. "
+                "Write all text fields in the same language as the gist content. "
+                "If the gists are in Korean, write title, summary, keywords, semantic_text, and all other text fields in Korean. "
+                "Return JSON only with this shape: "
+                "{\"episodes\":[{\"title\":\"...\",\"summary\":\"...\",\"episode_type\":\"topic\","
+                "\"emotion_signal\":null,\"importance_score\":0.0,\"keywords\":[\"...\"],"
+                "\"user_goal\":\"...\",\"context\":\"...\",\"decision_or_insight\":\"...\","
+                "\"emotional_or_situational_cue\":null,\"representative_snippets\":[\"...\"],"
+                "\"semantic_text\":\"...\","
+                "\"rawlog_ids\":[\"...\"]}]}. "
+                "Each rawlog_id must come from the provided gist segments' rawlog_ids exactly."
+            ),
+            input=(
+                "Build semantic episodes from these gist segments. "
+                "Each gist is a compressed summary of a conversation chunk. "
+                "Group gists that share the same theme, goal, or problem into a single episode. "
+                "semantic_text should be optimized for natural-language recall queries.\n\n"
+                f"{json.dumps({'gists': gist_segments}, ensure_ascii=False)}"
+            ),
+        )
+        content = (response.output_text or "").strip()
+        if not content:
+            raise RuntimeError("OpenAI returned an empty episode build response from gists")
         return self._parse_episode_json(content)
 
     def _parse_episode_json(self, content: str) -> list[dict]:

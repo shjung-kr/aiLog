@@ -10,6 +10,7 @@ from app.pipeline.episode.episode_builder import (
     EpisodeBuilder,
 )
 from app.services.episode_service import EpisodeService
+from app.services.gist_service import GistService
 from app.services.rawlog_service import RawLogService
 from app.services.turn_service import TurnService
 
@@ -56,27 +57,52 @@ class EpisodeBuilderService:
         turn_service: TurnService,
         rawlog_service: RawLogService,
         llm_client: LLMClient,
+        gist_service: GistService | None = None,
     ) -> None:
         self.episode_service = episode_service
         self.turn_service = turn_service
         self.rawlog_service = rawlog_service
         self.llm_client = llm_client
+        self.gist_service = gist_service
         self.episode_builder = EpisodeBuilder(llm_client)
         self._last_match_score = 0.0
         self._last_match_method: str | None = None
 
     def build_from_session(self, session_id: str, rebuild_existing: bool = True) -> list[Episode]:
-        turns = self.turn_service.build_from_session(session_id)
-        rawlogs = self.rawlog_service.list_session_rawlogs(session_id)
-        rawlog_by_id = {rawlog.rawlog_id: rawlog for rawlog in rawlogs}
+        gists = self.gist_service.list_for_session(session_id) if self.gist_service else []
 
-        llm_turns = []
-        for turn in turns:
-            start = rawlog_by_id[turn.start_rawlog_id].sequence_no
-            end = rawlog_by_id[turn.end_rawlog_id].sequence_no
-            turn_rawlogs = [rawlog for rawlog in rawlogs if start <= rawlog.sequence_no <= end]
-            llm_turns.append(
-                {
+        if gists:
+            valid_rawlog_ids: set[str] = set()
+            gist_segments: list[dict] = []
+            for gist in gists:
+                rawlog_ids = (gist.metadata_json or {}).get("rawlog_ids", [])
+                valid_rawlog_ids.update(rawlog_ids)
+                gist_segments.append({
+                    "gist_id": gist.gist_id,
+                    "gist_text": gist.gist_text,
+                    "topic": gist.topic,
+                    "intent": gist.intent,
+                    "rawlog_ids": rawlog_ids,
+                })
+
+            if rebuild_existing:
+                self.episode_service.clear_session_episodes(session_id)
+
+            built_episodes = self.episode_builder.build_from_gists(
+                gist_segments=gist_segments,
+                valid_rawlog_ids=valid_rawlog_ids,
+            )
+        else:
+            turns = self.turn_service.build_from_session(session_id)
+            rawlogs = self.rawlog_service.list_session_rawlogs(session_id)
+            rawlog_by_id = {rawlog.rawlog_id: rawlog for rawlog in rawlogs}
+
+            llm_turns = []
+            for turn in turns:
+                start = rawlog_by_id[turn.start_rawlog_id].sequence_no
+                end = rawlog_by_id[turn.end_rawlog_id].sequence_no
+                turn_rawlogs = [rawlog for rawlog in rawlogs if start <= rawlog.sequence_no <= end]
+                llm_turns.append({
                     "turn_id": turn.turn_id,
                     "rawlogs": [
                         {
@@ -87,17 +113,16 @@ class EpisodeBuilderService:
                         }
                         for rawlog in turn_rawlogs
                     ],
-                }
-            )
+                })
 
-        if not llm_turns:
-            return []
+            if not llm_turns:
+                return []
 
-        if rebuild_existing:
-            self.episode_service.clear_session_episodes(session_id)
+            if rebuild_existing:
+                self.episode_service.clear_session_episodes(session_id)
 
-        valid_rawlog_ids = {rawlog.rawlog_id for rawlog in rawlogs}
-        built_episodes = self.episode_builder.build(llm_turns=llm_turns, valid_rawlog_ids=valid_rawlog_ids)
+            valid_rawlog_ids = {rawlog.rawlog_id for rawlog in rawlogs}
+            built_episodes = self.episode_builder.build(llm_turns=llm_turns, valid_rawlog_ids=valid_rawlog_ids)
         episodes: list[Episode] = []
         existing_episodes = self.episode_service.list_all_episodes(limit=300)
         for item in built_episodes:
@@ -128,6 +153,7 @@ class EpisodeBuilderService:
                 self._store_episode_embedding(episode)
                 existing_episodes.append(episode)
             else:
+                old_semantic_text = self._episode_semantic_text(matching_episode)
                 episode = self.episode_service.merge_episode(
                     episode=matching_episode,
                     title=item.title,
@@ -145,10 +171,26 @@ class EpisodeBuilderService:
                         **item.metadata,
                     },
                 )
+                merged_semantic_text = self._merged_semantic_text(old_semantic_text, item.semantic_text)
+                episode.metadata_json = {
+                    **(episode.metadata_json or {}),
+                    SEMANTIC_TEXT_METADATA_KEY: merged_semantic_text,
+                }
+                self.episode_service.update_episode(episode)
                 self._store_episode_embedding(episode)
             episodes.append(episode)
 
         return episodes
+
+    def _merged_semantic_text(self, old_text: str, new_text: str) -> str:
+        if not old_text.strip():
+            return new_text
+        if not new_text.strip():
+            return old_text
+        try:
+            return self.llm_client.merge_semantic_text(old_text, new_text)
+        except Exception:
+            return new_text
 
     def _find_matching_episode(
         self,
