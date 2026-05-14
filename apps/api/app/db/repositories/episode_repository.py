@@ -71,11 +71,23 @@ class EpisodeRepository:
             self.db.execute(delete(Episode).where(Episode.episode_id.in_(orphan_episode_ids)))
         self.db.flush()
 
+    def delete_by_id(self, episode_id: str) -> None:
+        self.db.execute(delete(EpisodeRawLog).where(EpisodeRawLog.episode_id == episode_id))
+        self.db.execute(delete(Episode).where(Episode.episode_id == episode_id))
+        self.db.flush()
+
     def replace_rawlog_links(self, episode_id: str, rawlog_ids: list[str]) -> None:
         self.db.execute(delete(EpisodeRawLog).where(EpisodeRawLog.episode_id == episode_id))
         for position, rawlog_id in enumerate(rawlog_ids, start=1):
             self.db.add(EpisodeRawLog(episode_id=episode_id, rawlog_id=rawlog_id, position=position))
         self.db.flush()
+
+    def get_by_rawlog_range(self, start_rawlog_id: str, end_rawlog_id: str) -> Episode | None:
+        stmt = select(Episode).where(
+            Episode.start_rawlog_id == start_rawlog_id,
+            Episode.end_rawlog_id == end_rawlog_id,
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def list_rawlog_ids(self, episode_id: str) -> list[str]:
         stmt = (

@@ -144,6 +144,12 @@ class EpisodeService:
     def clear_session_episodes(self, session_id: str) -> None:
         self.episode_repository.delete_by_session_id(session_id)
 
+    def get_by_rawlog_range(self, start_rawlog_id: str, end_rawlog_id: str) -> Episode | None:
+        return self.episode_repository.get_by_rawlog_range(start_rawlog_id, end_rawlog_id)
+
+    def delete_episode(self, episode_id: str) -> None:
+        self.episode_repository.delete_by_id(episode_id)
+
     def _load_rawlogs(self, rawlog_ids: list[str]) -> list[RawLog]:
         return self.rawlog_service.list_rawlogs_by_ids(rawlog_ids)
 

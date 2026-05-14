@@ -44,7 +44,15 @@ class ChatService:
         memory_context = None
         context_used: list[dict] = []
         if self.retrieval_service is not None:
-            memory_context, context_used = self.retrieval_service.retrieve_for_query(payload.content)
+            # Pass last 2 turns (up to 4 messages) so follow-up queries can be enriched
+            recent_turns = [
+                f"{r.speaker_type}: {r.content[:300]}"
+                for r in conversation[:-1]
+                if r.speaker_type in ("user", "assistant")
+            ][-4:]
+            memory_context, context_used = self.retrieval_service.retrieve_for_query(
+                payload.content, session_id=session_id, recent_turns=recent_turns
+            )
 
         assistant_text, source_model, sources = self.llm_client.generate_reply(
             conversation,

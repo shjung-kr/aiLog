@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.db.repositories.rawlog_repository import RawLogRepository
 from app.db.repositories.episode_repository import EpisodeRepository
+from app.db.repositories.rawlog_repository import RawLogRepository
+from app.db.repositories.search_repository import SearchRepository
 from app.db.repositories.session_repository import SessionRepository
 from app.db.repositories.turn_repository import TurnRepository
 from app.db.session import get_db
@@ -25,7 +26,7 @@ def send_chat_message(payload: ChatMessageCreate, db: Session = Depends(get_db))
     rawlog_service = RawLogService(RawLogRepository(db), session_service)
     turn_service = TurnService(TurnRepository(db), rawlog_service)
     llm_client = LLMClient()
-    retrieval_service = RetrievalService(EpisodeRepository(db), rawlog_service, llm_client)
+    retrieval_service = RetrievalService(EpisodeRepository(db), rawlog_service, llm_client, SearchRepository(db))
 
     try:
         chat_service = ChatService(

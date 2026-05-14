@@ -10,6 +10,8 @@ from app.db.repositories.turn_repository import TurnRepository
 from app.db.session import get_db
 from app.llm.client import LLMClient
 from app.schemas.episode import EpisodeBuildRequest, EpisodeCreate, EpisodeRead
+from app.services.episode_builder_service import TITLE_EMBEDDING_METADATA_KEY
+from app.schemas.rawlog import RawLogRead
 from app.services.episode_builder_service import EpisodeBuilderService
 from app.services.episode_service import EpisodeService
 from app.services.gist_service import GistService
@@ -45,6 +47,7 @@ def _serialize_episode(episode_service: EpisodeService, episode: Episode) -> Epi
     data = EpisodeRead.model_validate(episode)
     metadata = dict(data.metadata or {})
     metadata.pop("semantic_embedding", None)
+    metadata.pop("title_embedding", None)
     return data.model_copy(
         update={
             "rawlog_ids": episode_service.list_episode_rawlog_ids(episode.episode_id),
@@ -98,6 +101,17 @@ def list_episodes(
     return [_serialize_episode(episode_service, episode) for episode in episodes]
 
 
+@router.get("/{episode_id}/rawlogs", response_model=list[RawLogRead])
+def list_episode_rawlogs(episode_id: str, db: Session = Depends(get_db)) -> list[RawLogRead]:
+    episode_service = _build_service(db)
+    try:
+        episode_service.require_episode(episode_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    rawlogs = EpisodeRepository(db).list_rawlogs(episode_id)
+    return [RawLogRead.model_validate(r) for r in rawlogs]
+
+
 @router.get("/{episode_id}", response_model=EpisodeRead)
 def read_episode(episode_id: str, db: Session = Depends(get_db)) -> EpisodeRead:
     episode_service = _build_service(db)
@@ -107,6 +121,31 @@ def read_episode(episode_id: str, db: Session = Depends(get_db)) -> EpisodeRead:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return _serialize_episode(episode_service, episode)
+
+
+@router.post("/backfill-title-embeddings", status_code=status.HTTP_200_OK)
+def backfill_title_embeddings(db: Session = Depends(get_db)) -> dict:
+    """Generate title_embedding for episodes that are missing it."""
+    episode_service = _build_service(db)
+    llm_client = LLMClient()
+    episodes = episode_service.list_all_episodes(limit=500)
+    updated = 0
+    for episode in episodes:
+        metadata = episode.metadata_json or {}
+        if isinstance(metadata.get(TITLE_EMBEDDING_METADATA_KEY), list):
+            continue
+        parts = [episode.title.strip()]
+        if episode.keywords:
+            parts.append(", ".join(str(k) for k in episode.keywords))
+        title_text = ". ".join(parts)
+        try:
+            embedding = llm_client.embed_texts([title_text])[0]
+        except Exception:
+            continue
+        episode.metadata_json = {**metadata, TITLE_EMBEDDING_METADATA_KEY: embedding}
+        episode_service.update_episode(episode)
+        updated += 1
+    return {"updated": updated, "total": len(episodes)}
 
 
 @router.post("/build-from-session/{session_id}", response_model=list[EpisodeRead], status_code=status.HTTP_201_CREATED)

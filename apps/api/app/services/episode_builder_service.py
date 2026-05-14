@@ -18,6 +18,7 @@ EMBEDDING_MERGE_THRESHOLD = 0.74
 MIN_EMBEDDING_COSINE_FOR_MERGE = 0.68
 FALLBACK_MERGE_SIMILARITY_THRESHOLD = 0.16
 EMBEDDING_METADATA_KEY = "semantic_embedding"
+TITLE_EMBEDDING_METADATA_KEY = "title_embedding"
 EMBEDDING_MODEL_METADATA_KEY = "semantic_embedding_model"
 STOPWORDS = {
     "turn",
@@ -71,6 +72,15 @@ class EpisodeBuilderService:
     def build_from_session(self, session_id: str, rebuild_existing: bool = True) -> list[Episode]:
         gists = self.gist_service.list_for_session(session_id) if self.gist_service else []
 
+        # Snapshot existing session episodes BEFORE any modification.
+        # These are merge-first candidates so their episode_ids are preserved
+        # and references stored in rawlog metadata (context_used) stay valid.
+        session_episodes_before: list[Episode] = (
+            self.episode_service.list_episodes(source_session_id=session_id, limit=200)
+            if rebuild_existing else []
+        )
+        session_ep_ids_before: set[str] = {ep.episode_id for ep in session_episodes_before}
+
         if gists:
             valid_rawlog_ids: set[str] = set()
             gist_segments: list[dict] = []
@@ -84,9 +94,6 @@ class EpisodeBuilderService:
                     "intent": gist.intent,
                     "rawlog_ids": rawlog_ids,
                 })
-
-            if rebuild_existing:
-                self.episode_service.clear_session_episodes(session_id)
 
             built_episodes = self.episode_builder.build_from_gists(
                 gist_segments=gist_segments,
@@ -118,13 +125,20 @@ class EpisodeBuilderService:
             if not llm_turns:
                 return []
 
-            if rebuild_existing:
-                self.episode_service.clear_session_episodes(session_id)
-
             valid_rawlog_ids = {rawlog.rawlog_id for rawlog in rawlogs}
             built_episodes = self.episode_builder.build(llm_turns=llm_turns, valid_rawlog_ids=valid_rawlog_ids)
+
+        # Build candidate pool: session's own episodes first (higher merge priority),
+        # then the rest of the cross-session pool.
+        cross_session_episodes = [
+            ep for ep in self.episode_service.list_all_episodes(limit=400)
+            if ep.episode_id not in session_ep_ids_before
+        ]
+        existing_episodes: list[Episode] = [*session_episodes_before, *cross_session_episodes]
+
         episodes: list[Episode] = []
-        existing_episodes = self.episode_service.list_all_episodes(limit=300)
+        matched_session_ep_ids: set[str] = set()
+
         for item in built_episodes:
             matching_episode = self._find_matching_episode(
                 existing_episodes=existing_episodes,
@@ -133,7 +147,14 @@ class EpisodeBuilderService:
                 episode_type=item.episode_type,
                 keywords=item.keywords,
                 semantic_text=item.semantic_text,
+                session_ep_ids=session_ep_ids_before,
             )
+            if matching_episode is None:
+                # Before creating, check if an episode already covers the same rawlog range.
+                # This prevents UNIQUE constraint violations on (start_rawlog_id, end_rawlog_id)
+                # when the semantic similarity was too low to detect a match.
+                matching_episode = self._find_episode_by_rawlog_range(item.rawlog_ids)
+
             if matching_episode is None:
                 episode = self.episode_service.create_episode(
                     title=item.title,
@@ -153,6 +174,8 @@ class EpisodeBuilderService:
                 self._store_episode_embedding(episode)
                 existing_episodes.append(episode)
             else:
+                if matching_episode.episode_id in session_ep_ids_before:
+                    matched_session_ep_ids.add(matching_episode.episode_id)
                 old_semantic_text = self._episode_semantic_text(matching_episode)
                 episode = self.episode_service.merge_episode(
                     episode=matching_episode,
@@ -180,7 +203,31 @@ class EpisodeBuilderService:
                 self._store_episode_embedding(episode)
             episodes.append(episode)
 
+        # Remove stale session episodes that were not matched by any new build item.
+        # These represent topics that no longer appear in the freshly rebuilt session,
+        # so keeping them would leave orphaned episodes.
+        stale_ids = session_ep_ids_before - matched_session_ep_ids
+        for ep_id in stale_ids:
+            try:
+                self.episode_service.delete_episode(ep_id)
+            except Exception:
+                pass
+
         return episodes
+
+    def _find_episode_by_rawlog_range(self, rawlog_ids: list[str]) -> Episode | None:
+        if not rawlog_ids:
+            return None
+        try:
+            rawlogs = self.rawlog_service.list_rawlogs_by_ids(rawlog_ids)
+            if not rawlogs:
+                return None
+            ordered = sorted(rawlogs, key=lambda r: (r.occurred_at, r.sequence_no))
+            return self.episode_service.get_by_rawlog_range(
+                ordered[0].rawlog_id, ordered[-1].rawlog_id
+            )
+        except Exception:
+            return None
 
     def _merged_semantic_text(self, old_text: str, new_text: str) -> str:
         if not old_text.strip():
@@ -200,13 +247,17 @@ class EpisodeBuilderService:
         episode_type: str,
         keywords: list[str] | None,
         semantic_text: str,
+        session_ep_ids: set[str] | None = None,
     ) -> Episode | None:
         self._last_match_score = 0.0
         self._last_match_method = None
         try:
             candidate_embedding = self.llm_client.embed_texts([semantic_text])[0]
-            best_episode = None
-            best_score = 0.0
+            best_session_episode = None
+            best_session_score = 0.0
+            best_cross_episode = None
+            best_cross_score = 0.0
+
             for episode in existing_episodes:
                 episode_embedding = self._ensure_episode_embedding(episode)
                 cosine_score = self._cosine_similarity(candidate_embedding, episode_embedding)
@@ -219,15 +270,30 @@ class EpisodeBuilderService:
                     left_episode_type=episode.episode_type,
                     right_episode_type=episode_type,
                 )
-                if score > best_score:
-                    best_score = score
-                    best_episode = episode
+                if session_ep_ids and episode.episode_id in session_ep_ids:
+                    if score > best_session_score:
+                        best_session_score = score
+                        best_session_episode = episode
+                else:
+                    if score > best_cross_score:
+                        best_cross_score = score
+                        best_cross_episode = episode
 
-            self._last_match_score = best_score
+            # Prefer same-session episode when it meets the merge threshold.
+            # This prevents existing session episodes from being incorrectly marked
+            # stale just because a cross-session episode scored marginally higher.
+            if best_session_score >= EMBEDDING_MERGE_THRESHOLD:
+                self._last_match_score = best_session_score
+                self._last_match_method = "semantic_embedding_hybrid_session_preferred"
+                return best_session_episode
+            if best_cross_score >= EMBEDDING_MERGE_THRESHOLD:
+                self._last_match_score = best_cross_score
+                self._last_match_method = "semantic_embedding_hybrid"
+                return best_cross_episode
+
+            self._last_match_score = max(best_session_score, best_cross_score)
             self._last_match_method = "semantic_embedding_hybrid"
-            if best_score < EMBEDDING_MERGE_THRESHOLD:
-                return None
-            return best_episode
+            return None
         except Exception:
             return self._find_matching_episode_by_metadata(
                 existing_episodes=existing_episodes,
@@ -265,12 +331,14 @@ class EpisodeBuilderService:
         return best_episode
 
     def _store_episode_embedding(self, episode: Episode) -> None:
-        text = self._episode_semantic_text(episode)
-        embedding = self.llm_client.embed_texts([text])[0]
+        semantic_text = self._episode_semantic_text(episode)
+        title_text = self._title_index_text(episode)
+        embeddings = self.llm_client.embed_texts([semantic_text, title_text])
         episode.metadata_json = {
             **(episode.metadata_json or {}),
-            SEMANTIC_TEXT_METADATA_KEY: text,
-            EMBEDDING_METADATA_KEY: embedding,
+            SEMANTIC_TEXT_METADATA_KEY: semantic_text,
+            EMBEDDING_METADATA_KEY: embeddings[0],
+            TITLE_EMBEDDING_METADATA_KEY: embeddings[1],
             EMBEDDING_MODEL_METADATA_KEY: getattr(self.llm_client, "embedding_model", None),
             EMBEDDING_SOURCE_VERSION_METADATA_KEY: EMBEDDING_SOURCE_VERSION,
         }
@@ -304,6 +372,13 @@ class EpisodeBuilderService:
         if isinstance(semantic_text, str) and semantic_text.strip():
             return semantic_text.strip()
         return self._semantic_text(title=episode.title, summary=episode.summary, keywords=episode.keywords)
+
+    def _title_index_text(self, episode: Episode) -> str:
+        """Short title+keywords text for topic recall queries (complements long semantic_text embedding)."""
+        parts = [episode.title.strip()]
+        if episode.keywords:
+            parts.append(", ".join(str(k) for k in episode.keywords))
+        return ". ".join(parts)
 
     def _semantic_text(self, title: str, summary: str, keywords: list[str] | None) -> str:
         keyword_text = ", ".join(str(keyword) for keyword in keywords or [])
