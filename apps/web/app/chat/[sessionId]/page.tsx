@@ -1,225 +1,214 @@
 'use client';
 
-import type { CSSProperties } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import Shell from '../../components/shell';
 import { getSessionRawLogs } from '../../../lib/api-client';
 import type { RawLogResponse } from '../../../lib/types';
 
 export default function SessionChatPage() {
-  const params = useParams<{ sessionId: string }>();
+  const { sessionId } = useParams<{ sessionId: string }>();
   const [messages, setMessages] = useState<RawLogResponse[]>([]);
-  const [sessionId, setSessionId] = useState<string>('');
-  const [status, setStatus] = useState('Loading session...');
+  const [status, setStatus]     = useState('Loading…');
+  const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    if (!params.sessionId) {
-      return;
-    }
-
+    if (!sessionId) return;
     let cancelled = false;
-    setSessionId(params.sessionId);
-    void getSessionRawLogs(params.sessionId)
-      .then((response) => {
-        if (cancelled) {
-          return;
-        }
-        setMessages(response.messages);
-        setStatus(`${response.messages.length} messages loaded`);
+
+    void getSessionRawLogs(sessionId)
+      .then((r) => {
+        if (cancelled) return;
+        setMessages(r.messages);
+        setStatus(`▸ ${r.messages.length} messages`);
+        setLoading(false);
       })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-        setStatus(error instanceof Error ? error.message : 'Failed to load session');
+      .catch((err) => {
+        if (cancelled) return;
+        setStatus(err instanceof Error ? `✕ ${err.message}` : '✕ Failed to load');
+        setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [params]);
+    return () => { cancelled = true; };
+  }, [sessionId]);
 
   return (
-    <main style={styles.page}>
-      <section style={styles.shell}>
-        <header style={styles.header}>
-          <div>
-            <p style={styles.eyebrow}>RawLog Session</p>
-            <h1 style={styles.title}>Stored conversation logs.</h1>
-            <p style={styles.sessionId}>{sessionId}</p>
-          </div>
-          <div style={styles.links}>
-            <Link href="/sessions" style={styles.secondaryLink}>
-              Sessions
-            </Link>
-            <Link href="/episodes" style={styles.secondaryLink}>
-              Episodes
-            </Link>
-            <Link href="/chat" style={styles.primaryLink}>
-              Chat
-            </Link>
-          </div>
+    <Shell>
+      <div className="page">
+        <header className="page-header">
+          <p className="eyebrow">◆ RawLog Session</p>
+          <h1 className="page-title">Stored conversation</h1>
+          <p className="session-id">▸ {sessionId}</p>
+          <p className="page-status">{status}</p>
         </header>
 
-        <p style={styles.status}>{status}</p>
-
-        <section style={styles.messages}>
-          {messages.length === 0 ? (
-            <article style={styles.emptyCard}>
-              <p style={styles.emptyText}>No RawLogs stored for this session.</p>
-            </article>
+        <div className="msg-list">
+          {loading ? (
+            [1, 2, 3].map((i) => <div key={i} className="skeleton" />)
+          ) : messages.length === 0 ? (
+            <div className="empty">
+              <p className="empty-icon">◆</p>
+              <p className="empty-text">No messages stored for this session.</p>
+            </div>
           ) : (
-            messages.map((message) => (
-              <article key={message.rawlog_id} style={styles.messageCard}>
-                <div style={styles.messageMeta}>
-                  <span style={message.speaker_type === 'user' ? styles.userBadge : styles.assistantBadge}>
-                    {message.speaker_type}
+            messages.map((msg, idx) => (
+              <article
+                key={msg.rawlog_id}
+                className="msg-card"
+                style={{ animationDelay: `${Math.min(idx * 25, 300)}ms` }}
+              >
+                <div className="card-top">
+                  <span className={msg.speaker_type === 'user' ? 'badge user-badge' : 'badge asst-badge'}>
+                    {msg.speaker_type === 'user' ? '▸ User' : '◆ aiLog'}
                   </span>
-                  <span>#{message.sequence_no}</span>
-                  <span>{new Date(message.occurred_at).toLocaleString()}</span>
+                  <span className="seq">#{msg.sequence_no}</span>
+                  <span className="date">
+                    {new Date(msg.occurred_at).toLocaleString('ko-KR', {
+                      month: 'short', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </span>
                 </div>
-                <p style={styles.messageText}>{message.content}</p>
-                <div style={styles.rawlogMeta}>
-                  <span>{message.message_type || 'message'}</span>
-                  <span>{message.rawlog_id}</span>
+
+                <p className="msg-text">{msg.content}</p>
+
+                <div className="card-footer">
+                  <span className="msg-type">◆ {msg.message_type || 'message'}</span>
+                  <span className="rawlog-id">▸ {msg.rawlog_id.slice(0, 20)}…</span>
                 </div>
               </article>
             ))
           )}
-        </section>
-      </section>
-    </main>
+        </div>
+
+        <style>{`
+          .page { max-width: 800px; }
+
+          .page-header { margin-bottom: 24px; }
+
+          .eyebrow {
+            margin: 0 0 6px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #6366f1;
+          }
+
+          .page-title {
+            margin: 0 0 4px;
+            font-size: 28px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.02em;
+            line-height: 1.15;
+          }
+
+          .session-id {
+            margin: 0 0 4px;
+            font-size: 12px;
+            color: #94a3b8;
+            font-family: ui-monospace, monospace;
+            word-break: break-all;
+          }
+
+          .page-status {
+            margin: 0;
+            font-size: 13px;
+            color: #94a3b8;
+          }
+
+          .msg-list { display: grid; gap: 10px; }
+
+          .msg-card {
+            display: grid;
+            gap: 10px;
+            padding: 16px 20px;
+            border-radius: 14px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            transition: box-shadow 0.15s;
+            animation: cardIn 0.3s ease-out both;
+          }
+
+          .msg-card:hover {
+            box-shadow: 0 2px 12px rgba(99,102,241,0.08);
+            border-color: #c7d2fe;
+          }
+
+          .card-top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+          }
+
+          .badge {
+            display: inline-flex;
+            align-items: center;
+            height: 22px;
+            padding: 0 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+          }
+
+          .user-badge { background: #dcfce7; color: #16a34a; }
+          .asst-badge { background: #eef2ff; color: #6366f1; }
+
+          .seq { font-size: 12px; color: #94a3b8; }
+          .date { font-size: 12px; color: #94a3b8; margin-left: auto; }
+
+          .msg-text {
+            margin: 0;
+            font-size: 15px;
+            line-height: 1.65;
+            color: #334155;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+          }
+
+          .card-footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding-top: 6px;
+            border-top: 1px solid #f1f5f9;
+          }
+
+          .msg-type {
+            font-size: 11px;
+            color: #6366f1;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+          }
+
+          .rawlog-id {
+            font-size: 11px;
+            color: #cbd5e1;
+            font-family: ui-monospace, monospace;
+          }
+
+          .skeleton {
+            height: 110px;
+            border-radius: 14px;
+            background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s infinite;
+          }
+
+          .empty {
+            text-align: center;
+            padding: 56px 24px;
+          }
+
+          .empty-icon { margin: 0 0 10px; font-size: 36px; color: #c7d2fe; }
+          .empty-text { margin: 0; color: #94a3b8; font-size: 15px; }
+        `}</style>
+      </div>
+    </Shell>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    background: '#f7f7f5',
-    color: '#1f2937',
-    padding: '32px 20px',
-    fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-  },
-  shell: {
-    maxWidth: '960px',
-    margin: '0 auto',
-    display: 'grid',
-    gap: '18px',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: '16px',
-    alignItems: 'flex-end',
-    flexWrap: 'wrap',
-  },
-  eyebrow: {
-    margin: 0,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    fontSize: '12px',
-    color: '#475569',
-  },
-  title: {
-    margin: '8px 0 0',
-    fontSize: '32px',
-    lineHeight: 1.1,
-  },
-  sessionId: {
-    margin: '10px 0 0',
-    color: '#64748b',
-    fontSize: '13px',
-    wordBreak: 'break-all',
-  },
-  links: {
-    display: 'flex',
-    gap: '10px',
-    flexWrap: 'wrap',
-  },
-  primaryLink: {
-    textDecoration: 'none',
-    padding: '10px 14px',
-    borderRadius: '8px',
-    background: '#111827',
-    color: '#ffffff',
-  },
-  secondaryLink: {
-    textDecoration: 'none',
-    padding: '10px 14px',
-    borderRadius: '8px',
-    border: '1px solid #d1d5db',
-    color: '#111827',
-  },
-  status: {
-    margin: 0,
-    color: '#475569',
-  },
-  messages: {
-    display: 'grid',
-    gap: '12px',
-  },
-  emptyCard: {
-    padding: '16px',
-    borderRadius: '8px',
-    background: '#ffffff',
-    border: '1px solid #e5e7eb',
-  },
-  emptyText: {
-    margin: 0,
-    color: '#64748b',
-  },
-  messageCard: {
-    display: 'grid',
-    gap: '10px',
-    borderRadius: '8px',
-    padding: '16px',
-    background: '#ffffff',
-    border: '1px solid #e5e7eb',
-  },
-  messageMeta: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    flexWrap: 'wrap',
-    fontSize: '12px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    color: '#64748b',
-  },
-  userBadge: {
-    borderRadius: '999px',
-    padding: '4px 8px',
-    background: '#dcfce7',
-    color: '#166534',
-    fontSize: '12px',
-    letterSpacing: 0,
-    textTransform: 'none',
-  },
-  assistantBadge: {
-    borderRadius: '999px',
-    padding: '4px 8px',
-    background: '#e0f2fe',
-    color: '#075985',
-    fontSize: '12px',
-    letterSpacing: 0,
-    textTransform: 'none',
-  },
-  messageText: {
-    margin: 0,
-    whiteSpace: 'pre-wrap',
-    lineHeight: 1.6,
-    fontSize: '16px',
-    color: '#334155',
-  },
-  rawlogMeta: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: '12px',
-    flexWrap: 'wrap',
-    color: '#64748b',
-    fontSize: '12px',
-    wordBreak: 'break-all',
-  },
-};

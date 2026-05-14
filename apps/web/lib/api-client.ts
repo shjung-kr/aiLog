@@ -2,6 +2,7 @@ import type {
   ChatMessageRequest,
   ChatMessageResponse,
   EpisodeListResponse,
+  EpisodeResponse,
   RawLogCreateRequest,
   RawLogResponse,
   SessionCreateRequest,
@@ -65,4 +66,12 @@ export function getEpisodes(sourceSessionId?: string, limit = 50): Promise<Episo
     params.set('source_session_id', sourceSessionId);
   }
   return request<EpisodeListResponse>(`/api/v1/episodes?${params.toString()}`);
+}
+
+export function getEpisode(episodeId: string): Promise<EpisodeResponse> {
+  return request<EpisodeResponse>(`/api/v1/episodes/${episodeId}`);
+}
+
+export function getEpisodeRawlogs(episodeId: string): Promise<RawLogResponse[]> {
+  return request<RawLogResponse[]>(`/api/v1/episodes/${episodeId}/rawlogs`);
 }
