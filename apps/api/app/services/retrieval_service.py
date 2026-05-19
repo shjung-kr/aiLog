@@ -86,6 +86,9 @@ class RetrievalService:
             # Penalise episodes that only record a failed recall attempt — they add noise.
             if _FAILED_RECALL_RE.search(semantic_text[:300]):
                 score -= META_RECALL_PENALTY
+            # Boost episodes that have been promoted to long-term memory.
+            if metadata.get("promoted_to_ltm"):
+                score += 0.05
             if score >= RETRIEVAL_SCORE_THRESHOLD:
                 candidates.append((score, episode))
 

@@ -91,3 +91,20 @@ export type EpisodeResponse = {
 };
 
 export type EpisodeListResponse = EpisodeResponse[];
+
+export type LongTermMemoryResponse = {
+  memory_id: string;
+  episode_id: string;
+  title: string;
+  memory_text: string;
+  memory_type: string;
+  importance_score: number | null;
+  created_at: string;
+  metadata: Record<string, unknown> | null;
+};
+
+export type PromoteResponse = {
+  promoted: number;
+  updated: number;
+  total_long_term_memories: number;
+};

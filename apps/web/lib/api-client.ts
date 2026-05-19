@@ -3,6 +3,8 @@ import type {
   ChatMessageResponse,
   EpisodeListResponse,
   EpisodeResponse,
+  LongTermMemoryResponse,
+  PromoteResponse,
   RawLogCreateRequest,
   RawLogResponse,
   SessionCreateRequest,
@@ -74,4 +76,16 @@ export function getEpisode(episodeId: string): Promise<EpisodeResponse> {
 
 export function getEpisodeRawlogs(episodeId: string): Promise<RawLogResponse[]> {
   return request<RawLogResponse[]>(`/api/v1/episodes/${episodeId}/rawlogs`);
+}
+
+export function getSession(sessionId: string): Promise<SessionResponse> {
+  return request<SessionResponse>(`/api/v1/sessions/${sessionId}`);
+}
+
+export function getMemories(limit = 100): Promise<LongTermMemoryResponse[]> {
+  return request<LongTermMemoryResponse[]>(`/api/v1/memories?limit=${limit}`);
+}
+
+export function promoteMemories(): Promise<PromoteResponse> {
+  return request<PromoteResponse>('/api/v1/memories/promote', { method: 'POST' });
 }

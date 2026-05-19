@@ -92,6 +92,10 @@ class EpisodeService:
         end_rawlog = ordered_rawlogs[-1]
         session_ids = sorted({rawlog.session_id for rawlog in ordered_rawlogs})
 
+        existing_metadata = episode.metadata_json or {}
+        contributing: set[str] = set(existing_metadata.get("contributing_session_ids") or [])
+        contributing.update(session_ids)
+
         episode.title = self._merge_title(episode.title, title)
         episode.summary = self._merge_summary(episode.summary, summary)
         if episode_type:
@@ -106,10 +110,11 @@ class EpisodeService:
         ) if episode.importance_score is not None or importance_score is not None else None
         episode.keywords = self._merge_keywords(episode.keywords, keywords)
         episode.metadata_json = {
-            **(episode.metadata_json or {}),
+            **existing_metadata,
             **(metadata or {}),
             "rawlog_count": len(ordered_rawlogs),
             "source_session_ids": session_ids,
+            "contributing_session_ids": sorted(contributing),
             "merged": True,
         }
 

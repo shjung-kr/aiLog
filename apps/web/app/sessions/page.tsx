@@ -16,7 +16,7 @@ export default function SessionsPage() {
     void getSessions()
       .then((items) => {
         setSessions(items);
-        setStatus(items.length === 0 ? 'No sessions yet' : `▸ ${items.length} sessions found`);
+        setStatus(items.length === 0 ? 'No sessions yet' : `${items.length} sessions`);
         setLoading(false);
       })
       .catch((err) => {
@@ -29,8 +29,8 @@ export default function SessionsPage() {
     <Shell>
       <div className="page">
         <header className="page-header">
-          <p className="eyebrow">◆ Saved Sessions</p>
-          <h1 className="page-title">Stored conversations</h1>
+          <p className="eyebrow">Sessions</p>
+          <h1 className="page-title">Conversation history</h1>
           <p className="page-status">{status}</p>
         </header>
 
@@ -39,7 +39,6 @@ export default function SessionsPage() {
             [1, 2, 3].map((i) => <div key={i} className="skeleton" />)
           ) : sessions.length === 0 ? (
             <div className="empty">
-              <p className="empty-icon">◆</p>
               <p className="empty-text">No sessions yet. Start chatting to create one.</p>
               <Link className="empty-cta" href="/chat">Open Chat →</Link>
             </div>
@@ -54,14 +53,13 @@ export default function SessionsPage() {
                 <div className="card-top">
                   <span className="badge">{s.status}</span>
                   <span className="card-date">
-                    {new Date(s.last_activity_at).toLocaleString('ko-KR', {
+                    {new Date(s.last_activity_at).toLocaleString('en-US', {
                       month: 'short', day: 'numeric',
                       hour: '2-digit', minute: '2-digit',
                     })}
                   </span>
                 </div>
                 <h2 className="card-title">{s.title || 'Untitled session'}</h2>
-                <p className="card-id">▸ {s.session_id.slice(0, 20)}…</p>
               </Link>
             ))
           )}

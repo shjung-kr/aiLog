@@ -1,212 +1,242 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import Shell from '../../components/shell';
-import { getSessionRawLogs } from '../../../lib/api-client';
-import type { RawLogResponse } from '../../../lib/types';
+import { getSession, getSessionRawLogs } from '../../../lib/api-client';
+import type { RawLogResponse, SessionResponse } from '../../../lib/types';
 
-export default function SessionChatPage() {
+export default function SessionHistoryPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const [session, setSession] = useState<SessionResponse | null>(null);
   const [messages, setMessages] = useState<RawLogResponse[]>([]);
-  const [status, setStatus]     = useState('Loading…');
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading] = useState(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
 
-    void getSessionRawLogs(sessionId)
-      .then((r) => {
+    Promise.all([
+      getSession(sessionId),
+      getSessionRawLogs(sessionId),
+    ])
+      .then(([sess, rawlogs]) => {
         if (cancelled) return;
-        setMessages(r.messages);
-        setStatus(`▸ ${r.messages.length} messages`);
+        setSession(sess);
+        setMessages(rawlogs.messages);
         setLoading(false);
       })
-      .catch((err) => {
-        if (cancelled) return;
-        setStatus(err instanceof Error ? `✕ ${err.message}` : '✕ Failed to load');
-        setLoading(false);
+      .catch(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => { cancelled = true; };
   }, [sessionId]);
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const title = session?.title || 'Conversation';
+  const dateStr = session
+    ? new Date(session.last_activity_at).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric',
+      })
+    : '';
+
   return (
     <Shell>
       <div className="page">
-        <header className="page-header">
-          <p className="eyebrow">◆ RawLog Session</p>
-          <h1 className="page-title">Stored conversation</h1>
-          <p className="session-id">▸ {sessionId}</p>
-          <p className="page-status">{status}</p>
+        <header className="hist-header">
+          <Link href="/sessions" className="back-btn">← Sessions</Link>
+          <div className="hist-title-row">
+            <h1 className="hist-title">{loading ? '…' : title}</h1>
+            {dateStr && <span className="hist-date">{dateStr}</span>}
+          </div>
+          <p className="hist-count">
+            {loading ? '' : `${messages.length} messages`}
+          </p>
         </header>
 
-        <div className="msg-list">
+        <div className="chat-log">
           {loading ? (
-            [1, 2, 3].map((i) => <div key={i} className="skeleton" />)
-          ) : messages.length === 0 ? (
-            <div className="empty">
-              <p className="empty-icon">◆</p>
-              <p className="empty-text">No messages stored for this session.</p>
+            <div className="loading-bubbles">
+              {[80, 60, 90, 50].map((w, i) => (
+                <div
+                  key={i}
+                  className={`bubble-skel ${i % 2 === 0 ? 'left' : 'right'}`}
+                  style={{ width: `${w}%` }}
+                />
+              ))}
             </div>
+          ) : messages.length === 0 ? (
+            <div className="empty">No messages in this session.</div>
           ) : (
-            messages.map((msg, idx) => (
-              <article
-                key={msg.rawlog_id}
-                className="msg-card"
-                style={{ animationDelay: `${Math.min(idx * 25, 300)}ms` }}
-              >
-                <div className="card-top">
-                  <span className={msg.speaker_type === 'user' ? 'badge user-badge' : 'badge asst-badge'}>
-                    {msg.speaker_type === 'user' ? '▸ User' : '◆ aiLog'}
-                  </span>
-                  <span className="seq">#{msg.sequence_no}</span>
-                  <span className="date">
-                    {new Date(msg.occurred_at).toLocaleString('ko-KR', {
-                      month: 'short', day: 'numeric',
-                      hour: '2-digit', minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-
-                <p className="msg-text">{msg.content}</p>
-
-                <div className="card-footer">
-                  <span className="msg-type">◆ {msg.message_type || 'message'}</span>
-                  <span className="rawlog-id">▸ {msg.rawlog_id.slice(0, 20)}…</span>
-                </div>
-              </article>
-            ))
+            messages
+              .filter((m) => m.speaker_type === 'user' || m.speaker_type === 'assistant')
+              .map((msg) => {
+                const isUser = msg.speaker_type === 'user';
+                return (
+                  <div key={msg.rawlog_id} className={`bubble-row ${isUser ? 'right' : 'left'}`}>
+                    {!isUser && <div className="avatar ai-avatar">aL</div>}
+                    <div className={`bubble ${isUser ? 'user-bubble' : 'ai-bubble'}`}>
+                      <p className="bubble-text">{msg.content}</p>
+                      <span className="bubble-time">
+                        {new Date(msg.occurred_at).toLocaleTimeString('en-US', {
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                    {isUser && <div className="avatar user-avatar">me</div>}
+                  </div>
+                );
+              })
           )}
+          <div ref={bottomRef} />
         </div>
 
         <style>{`
-          .page { max-width: 800px; }
+          .page { max-width: 760px; display: flex; flex-direction: column; gap: 0; }
 
-          .page-header { margin-bottom: 24px; }
+          .hist-header {
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 24px;
+          }
 
-          .eyebrow {
-            margin: 0 0 6px;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
+          .back-btn {
+            display: inline-flex;
+            align-items: center;
+            font-size: 13px;
             color: #6366f1;
+            font-weight: 500;
+            margin-bottom: 10px;
+            opacity: 0.8;
+            transition: opacity 0.12s;
+          }
+          .back-btn:hover { opacity: 1; }
+
+          .hist-title-row {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            flex-wrap: wrap;
           }
 
-          .page-title {
-            margin: 0 0 4px;
-            font-size: 28px;
-            font-weight: 800;
-            color: #0f172a;
-            letter-spacing: -0.02em;
-            line-height: 1.15;
-          }
-
-          .session-id {
-            margin: 0 0 4px;
-            font-size: 12px;
-            color: #94a3b8;
-            font-family: ui-monospace, monospace;
-            word-break: break-all;
-          }
-
-          .page-status {
+          .hist-title {
             margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            color: #0f172a;
+            letter-spacing: -0.01em;
+          }
+
+          .hist-date {
             font-size: 13px;
             color: #94a3b8;
           }
 
-          .msg-list { display: grid; gap: 10px; }
-
-          .msg-card {
-            display: grid;
-            gap: 10px;
-            padding: 16px 20px;
-            border-radius: 14px;
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            transition: box-shadow 0.15s;
-            animation: cardIn 0.3s ease-out both;
+          .hist-count {
+            margin: 4px 0 0;
+            font-size: 12px;
+            color: #94a3b8;
           }
 
-          .msg-card:hover {
-            box-shadow: 0 2px 12px rgba(99,102,241,0.08);
-            border-color: #c7d2fe;
-          }
-
-          .card-top {
+          .chat-log {
             display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
+            flex-direction: column;
+            gap: 12px;
+            padding-bottom: 40px;
           }
 
-          .badge {
-            display: inline-flex;
-            align-items: center;
-            height: 22px;
-            padding: 0 9px;
-            border-radius: 999px;
+          .bubble-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+          }
+
+          .bubble-row.right { flex-direction: row-reverse; }
+
+          .avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
             font-size: 11px;
             font-weight: 700;
+            flex-shrink: 0;
           }
 
-          .user-badge { background: #dcfce7; color: #16a34a; }
-          .asst-badge { background: #eef2ff; color: #6366f1; }
+          .ai-avatar  { background: #eef2ff; color: #6366f1; }
+          .user-avatar{ background: #dcfce7; color: #16a34a; }
 
-          .seq { font-size: 12px; color: #94a3b8; }
-          .date { font-size: 12px; color: #94a3b8; margin-left: auto; }
+          .bubble {
+            max-width: 75%;
+            padding: 10px 14px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+          }
 
-          .msg-text {
+          .ai-bubble {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-bottom-left-radius: 4px;
+          }
+
+          .user-bubble {
+            background: #6366f1;
+            border-bottom-right-radius: 4px;
+          }
+
+          .bubble-text {
             margin: 0;
-            font-size: 15px;
+            font-size: 14px;
             line-height: 1.65;
-            color: #334155;
             white-space: pre-wrap;
             overflow-wrap: anywhere;
           }
 
-          .card-footer {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            flex-wrap: wrap;
-            padding-top: 6px;
-            border-top: 1px solid #f1f5f9;
+          .ai-bubble .bubble-text   { color: #1e293b; }
+          .user-bubble .bubble-text { color: #fff; }
+
+          .bubble-time {
+            font-size: 10px;
+            align-self: flex-end;
           }
 
-          .msg-type {
-            font-size: 11px;
-            color: #6366f1;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-          }
+          .ai-bubble .bubble-time   { color: #94a3b8; }
+          .user-bubble .bubble-time { color: rgba(255,255,255,0.6); }
 
-          .rawlog-id {
-            font-size: 11px;
-            color: #cbd5e1;
-            font-family: ui-monospace, monospace;
-          }
+          .loading-bubbles { display: flex; flex-direction: column; gap: 12px; padding: 8px 0; }
 
-          .skeleton {
-            height: 110px;
-            border-radius: 14px;
+          .bubble-skel {
+            height: 52px;
+            border-radius: 16px;
             background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
             background-size: 200% 100%;
             animation: shimmer 1.4s infinite;
           }
 
+          .bubble-skel.right { align-self: flex-end; }
+          .bubble-skel.left  { align-self: flex-start; }
+
           .empty {
             text-align: center;
             padding: 56px 24px;
+            color: #94a3b8;
+            font-size: 15px;
           }
 
-          .empty-icon { margin: 0 0 10px; font-size: 36px; color: #c7d2fe; }
-          .empty-text { margin: 0; color: #94a3b8; font-size: 15px; }
+          @keyframes shimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+          }
         `}</style>
       </div>
     </Shell>

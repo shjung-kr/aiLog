@@ -4,207 +4,205 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
-const NAV = [
+const NAV_MAIN = [
   { href: '/chat',     label: 'Chat'     },
   { href: '/sessions', label: 'Sessions' },
-  { href: '/episodes', label: 'Episodes' },
   { href: '/memories', label: 'Memories' },
+];
+
+const NAV_DEV = [
+  { href: '/episodes', label: 'Episodes' },
   { href: '/search',   label: 'Search'   },
 ];
 
 export default function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
 
+  function isActive(href: string) {
+    if (href === '/chat') return path === href;
+    return path.startsWith(href);
+  }
+
   return (
-    <div className="pg-shell">
-      <aside className="pg-sidebar">
-        <div className="pg-brand">
-          <div className="pg-logo">aL</div>
-          <span className="pg-brand-name">aiLog</span>
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="logo">aL</div>
+          <span className="brand-name">aiLog</span>
         </div>
 
-        <Link href="/chat" className="pg-new-chat">
-          <span className="pg-plus">+</span>
-          New chat
+        <Link href="/chat" className="new-chat">
+          + New chat
         </Link>
 
-        <nav>
-          <p className="pg-nav-label">◆ Navigate</p>
-          {NAV.map((item) => {
-            const active =
-              path === item.href ||
-              (item.href !== '/chat' && path.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={active ? 'pg-nav-item active' : 'pg-nav-item'}
-              >
-                <span className="pg-nav-sym">{active ? '◆' : '▸'}</span>
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="nav">
+          {NAV_MAIN.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={isActive(item.href) ? 'nav-item active' : 'nav-item'}
+            >
+              {item.label}
+            </Link>
+          ))}
+
+          <div className="nav-divider" />
+
+          {NAV_DEV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={isActive(item.href) ? 'nav-item nav-dev active' : 'nav-item nav-dev'}
+            >
+              {item.label}
+            </Link>
+          ))}
         </nav>
 
-        <div className="pg-sidebar-footer">
-          <span className="pg-status-dot" />
-          <span>Memory System</span>
+        <div className="sidebar-footer">
+          <span className="status-dot" />
+          <span>online</span>
         </div>
       </aside>
 
-      <main className="pg-content">{children}</main>
+      <main className="content">{children}</main>
 
       <style>{`
-        .pg-shell {
+        .shell {
           min-height: 100vh;
           display: grid;
-          grid-template-columns: 240px 1fr;
-          background: #f1f5f9;
+          grid-template-columns: 200px 1fr;
+          background: #f8fafc;
           font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
           color: #1e293b;
         }
 
-        .pg-sidebar {
+        .sidebar {
           position: sticky;
           top: 0;
           height: 100vh;
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          padding: 16px 12px;
+          padding: 20px 12px;
           background: #0f172a;
-          color: #94a3b8;
           overflow-y: auto;
         }
 
-        .pg-brand {
+        .brand {
           display: flex;
           align-items: center;
-          gap: 10px;
-          padding: 4px 8px 14px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-          margin-bottom: 6px;
+          gap: 9px;
+          padding: 0 6px 20px;
+          margin-bottom: 4px;
         }
 
-        .pg-logo {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
+        .logo {
+          width: 28px;
+          height: 28px;
+          border-radius: 7px;
           background: #6366f1;
           color: #fff;
           display: grid;
           place-items: center;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
           flex-shrink: 0;
         }
 
-        .pg-brand-name {
-          font-size: 15px;
-          font-weight: 700;
+        .brand-name {
+          font-size: 14px;
+          font-weight: 600;
           color: #e2e8f0;
           letter-spacing: -0.01em;
         }
 
-        .pg-new-chat {
+        .new-chat {
           display: flex;
           align-items: center;
-          gap: 8px;
-          height: 38px;
-          padding: 0 12px;
+          justify-content: center;
+          height: 34px;
           border-radius: 8px;
+          background: rgba(99, 102, 241, 0.15);
+          color: #a5b4fc;
+          font-size: 13px;
+          font-weight: 500;
+          margin-bottom: 16px;
+          transition: background 0.15s;
+        }
+
+        .new-chat:hover {
+          background: rgba(99, 102, 241, 0.25);
+        }
+
+        .nav {
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+        }
+
+        .nav-item {
+          display: flex;
+          align-items: center;
+          height: 34px;
+          padding: 0 10px;
+          border-radius: 7px;
+          color: #64748b;
+          font-size: 13px;
+          font-weight: 500;
+          transition: background 0.1s, color 0.1s;
+        }
+
+        .nav-item:hover {
+          background: rgba(255,255,255,0.05);
+          color: #94a3b8;
+        }
+
+        .nav-item.active {
           background: rgba(99, 102, 241, 0.14);
           color: #a5b4fc;
-          font-size: 14px;
-          font-weight: 500;
-          transition: background 0.15s;
-          margin-bottom: 4px;
         }
 
-        .pg-new-chat:hover {
-          background: rgba(99, 102, 241, 0.24);
-        }
-
-        .pg-plus {
-          font-size: 20px;
-          font-weight: 300;
-          line-height: 1;
-        }
-
-        .pg-nav-label {
-          margin: 10px 8px 4px;
-          font-size: 10px;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
+        .nav-dev {
+          font-size: 12px;
           color: #334155;
-          font-weight: 600;
         }
 
-        .pg-nav-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          height: 36px;
-          padding: 0 10px;
-          border-radius: 8px;
-          color: #94a3b8;
-          font-size: 14px;
-          transition: background 0.12s, color 0.12s;
+        .nav-dev:hover { color: #475569; }
+        .nav-dev.active { color: #818cf8; }
+
+        .nav-divider {
+          height: 1px;
+          background: rgba(255,255,255,0.05);
+          margin: 10px 4px;
         }
 
-        .pg-nav-item:hover {
-          background: rgba(255, 255, 255, 0.06);
-          color: #cbd5e1;
-        }
-
-        .pg-nav-item.active {
-          background: rgba(99, 102, 241, 0.16);
-          color: #a5b4fc;
-        }
-
-        .pg-nav-sym {
-          font-size: 9px;
-          width: 12px;
-          text-align: center;
-          flex-shrink: 0;
-        }
-
-        .pg-sidebar-footer {
+        .sidebar-footer {
           margin-top: auto;
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 8px 10px;
-          font-size: 12px;
-          color: #334155;
-          border-top: 1px solid rgba(255, 255, 255, 0.05);
+          gap: 7px;
+          padding: 0 8px;
+          font-size: 11px;
+          color: #1e293b;
         }
 
-        .pg-status-dot {
-          width: 7px;
-          height: 7px;
+        .status-dot {
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
           background: #22c55e;
           flex-shrink: 0;
-          box-shadow: 0 0 6px #22c55e88;
         }
 
-        .pg-content {
+        .content {
           min-width: 0;
-          padding: 36px 28px;
+          padding: 40px 32px;
         }
 
         @media (max-width: 768px) {
-          .pg-shell {
-            grid-template-columns: 1fr;
-          }
-          .pg-sidebar {
-            display: none;
-          }
-          .pg-content {
-            padding: 20px 16px;
-          }
+          .shell { grid-template-columns: 1fr; }
+          .sidebar { display: none; }
+          .content { padding: 20px 16px; }
         }
       `}</style>
     </div>

@@ -32,6 +32,15 @@ def list_sessions(limit: int = 50, db: Session = Depends(get_db)) -> list[Sessio
     return [SessionRead.model_validate(session) for session in sessions]
 
 
+@router.get("/{session_id}", response_model=SessionRead)
+def get_session(session_id: str, db: Session = Depends(get_db)) -> SessionRead:
+    session_service, _ = _build_services(db)
+    session = session_service.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return SessionRead.model_validate(session)
+
+
 @router.get("/{session_id}/rawlogs", response_model=SessionRawLogsRead)
 def read_session_rawlogs(session_id: str, db: Session = Depends(get_db)) -> SessionRawLogsRead:
     _, rawlog_service = _build_services(db)

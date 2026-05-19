@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/shjung/projects/aiLog/.venv/bin/python -c \"import fastapi, sqlalchemy, uvicorn, openai, pydantic; print\\('All deps OK'\\)\")",
+      "Bash(/Users/shjung/projects/aiLog/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001)",
+      "Bash(curl -s http://127.0.0.1:8001/api/v1/sessions)",
+      "Bash(curl -s http://127.0.0.1:8001/api/v1/episodes)",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(f'에피소드 {len\\(data\\)}개'\\); [print\\(f'  - {e[\\\\\"title\\\\\"]} \\({e[\\\\\"episode_type\\\\\"]}\\)'\\) for e in data[:5]]\")",
+      "Bash(lsof -ti:8000)",
+      "Bash(lsof -ti:3000)",
+      "Bash(curl -s http://localhost:8000/api/v1/episodes)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s http://localhost:8000/api/v1/memories)",
+      "Bash(sqlite3 /Users/shjung/dev/projects/aiLog/apps/api/ailog.db ' *)"
+    ]
+  }
+}
