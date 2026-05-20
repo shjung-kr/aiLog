@@ -69,6 +69,7 @@ export type ChatMessageResponse = {
     episode_id: string;
     title: string;
     score: number;
+    start_at?: string | null;
     rawlog_ids: string[];
   }>;
 };

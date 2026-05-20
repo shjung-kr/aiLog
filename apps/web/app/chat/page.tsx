@@ -4,7 +4,7 @@ import type { FormEvent, ReactNode } from 'react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
-import { getEpisodeRawlogs, getSessionRawLogs, sendChatMessage } from '../../lib/api-client';
+import { getEpisode, getEpisodeRawlogs, getSessionRawLogs, sendChatMessage } from '../../lib/api-client';
 import type { RawLogResponse } from '../../lib/types';
 
 /* ── Markdown renderer ───────────────────────────────────────────────── */
@@ -188,7 +188,7 @@ function getContext(msg: RawLogResponse) {
   const c = msg.metadata?.context_used;
   return Array.isArray(c)
     ? c.filter(
-        (x): x is { episode_id: string; title: string; score: number } =>
+        (x): x is { episode_id: string; title: string; score: number; start_at?: string | null } =>
           typeof x === 'object' &&
           x !== null &&
           typeof (x as { episode_id?: unknown }).episode_id === 'string' &&
@@ -197,14 +197,43 @@ function getContext(msg: RawLogResponse) {
     : [];
 }
 
-function MemoryBanner({ ctx }: { ctx: { episode_id: string; title: string; score: number }[] }) {
+function formatEpisodeDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function MemoryBanner({ ctx }: { ctx: { episode_id: string; title: string; score: number; start_at?: string | null }[] }) {
   const [open, setOpen] = useState(false);
+  const [episodeStartAt, setEpisodeStartAt] = useState<string | null>(null);
   const [rawlogs, setRawlogs] = useState<RawLogResponse[] | null>(null);
   const [rawlogsLoading, setRawlogsLoading] = useState(false);
   const [rawlogsError, setRawlogsError] = useState<string | null>(null);
-
-  if (ctx.length === 0) return null;
   const ep = ctx[0];
+
+  useEffect(() => {
+    setEpisodeStartAt(null);
+    if (!ep || ep.start_at) return;
+    let cancelled = false;
+    void getEpisode(ep.episode_id)
+      .then((episode) => {
+        if (!cancelled) setEpisodeStartAt(episode.start_at);
+      })
+      .catch(() => {
+        if (!cancelled) setEpisodeStartAt(null);
+      });
+    return () => { cancelled = true; };
+  }, [ep?.episode_id, ep?.start_at]);
+
+  if (!ep) return null;
+  const episodeDate = formatEpisodeDate(ep.start_at ?? episodeStartAt);
 
   function loadRawlogs(e: React.MouseEvent) {
     e.stopPropagation();
@@ -225,12 +254,19 @@ function MemoryBanner({ ctx }: { ctx: { episode_id: string; title: string; score
       <span className="mem-banner-text">
         <strong>{ep.title}</strong>
       </span>
+      {episodeDate && <span className="mem-banner-date">{episodeDate}</span>}
       <span className="mem-banner-score">{ep.score.toFixed(2)}</span>
       <span className="mem-banner-toggle">{open ? '▲' : '▼'}</span>
       {open && (
         <div className="mem-banner-detail" onClick={(e) => e.stopPropagation()}>
           <p className="mem-detail-label">연관 기억</p>
           <p className="mem-detail-value">{ep.title}</p>
+          {episodeDate && (
+            <>
+              <p className="mem-detail-label">최초 대화</p>
+              <p className="mem-detail-value">{episodeDate}</p>
+            </>
+          )}
           <p className="mem-detail-label">ID</p>
           <Link
             href={`/episodes/${ep.episode_id}`}
@@ -1181,6 +1217,16 @@ export default function ChatPage() {
         }
 
         .mem-banner-text strong { font-weight: 700; }
+
+        .mem-banner-date {
+          font-size: 11px;
+          color: #15803d;
+          background: #dcfce7;
+          padding: 1px 7px;
+          border-radius: 999px;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
 
         .mem-banner-score {
           font-size: 11px;
