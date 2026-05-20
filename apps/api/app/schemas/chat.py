@@ -12,6 +12,7 @@ class ChatContextItem(BaseModel):
     episode_id: str
     title: str
     score: float
+    start_at: str | None = None
     rawlog_ids: list[str]
 
 

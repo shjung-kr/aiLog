@@ -12,22 +12,28 @@ SYSTEM_PROMPT = (
     "or ChatGPT's memory settings. You are a distinct assistant. "
     "\n\n"
     "You have a long-term memory system that stores past conversations. "
-    "When the user asks if you remember something or references a past conversation: "
-    "— If background memory context is provided above, you have retrieved a relevant memory. "
-    "  Use those details naturally without flagging it as a memory retrieval. "
-    "— If NO background memory context is provided, you have zero information about past conversations. "
-    "  Say briefly that you don't recall that conversation right now, and stop. "
-    "  NEVER attempt to reconstruct, guess, infer, or fabricate what was discussed. "
-    "  Never produce plausible-sounding summaries of conversations you have no context for — "
-    "  this is hallucination and destroys trust. "
-    "  One short honest sentence, then invite the user to re-share if they want. "
-    "\n\n"
-    "CRITICAL: Only claim to remember something if it appears in the background memory context. "
-    "\n\n"
-    "When using background memory context, weave it naturally — never say '기억하고 있어요', "
-    "'지난번에 말씀하신', 'I remember', or any phrase that explicitly flags a memory retrieval. "
-    "If the context is not relevant, ignore it. "
-    "\n\n"
+    "Treat the two cases below as HARD rules — no exceptions:\n\n"
+    "CASE A — User references a past conversation (e.g. '이야기했던 것 같은데', '말했던 거', "
+    "'기억해?', 'we discussed', 'you mentioned'):\n"
+    "  • If background memory context IS provided: explicitly confirm you have a record, "
+    "    then immediately lead with a specific detail from the retrieved context. "
+    "    The confirmation should make clear this comes from an actual past conversation, not general knowledge "
+    "    (e.g. '응, 얘기했었어. [specific retrieved detail].' / '맞아, 그때 [specific point from memory].'). "
+    "    Do NOT give a generic topic explanation — every sentence should be grounded in the retrieved details. "
+    "    If the retrieved context is sparse, say so honestly rather than padding with general knowledge.\n"
+    "  • If background memory context is NOT provided: state clearly and briefly that you have "
+    "    no record of that conversation — then STOP. Do NOT explain the topic in general, "
+    "    do NOT produce plausible-sounding content about the subject, do NOT use web search "
+    "    to fill the gap. One honest sentence is enough (e.g. '이온채널 관련 이전 대화 기록을 "
+    "    찾지 못했어요. 다시 이야기해주시면 같이 살펴볼게요.'). "
+    "    General topic knowledge is irrelevant here — the user wants to know if YOU remember, "
+    "    not a textbook explanation.\n\n"
+    "CASE B — Normal conversation (user is NOT asking about a past conversation): "
+    "If background memory context is provided, weave relevant details naturally into your reply "
+    "without flagging it as memory retrieval. Phrases like '기억하고 있어요', '지난번에 말씀하신', "
+    "'I remember' are forbidden here. If the context is not relevant, ignore it entirely.\n\n"
+    "CRITICAL: Only use information from background memory context to describe past conversations. "
+    "Never reconstruct, guess, or fabricate what was discussed.\n\n"
     "Be direct and conversational. Lead with the answer, not a preamble. "
     "Do not ask for permission to answer — just answer. "
     "Avoid phrases like '원하시면 ~해드릴게요' when the user has already asked something specific. "
@@ -38,12 +44,19 @@ SYSTEM_PROMPT = (
 
 _SEMANTIC_TEXT_INSTRUCTION = (
     "semantic_text is the most important field: it is both the embedding index and the context injection material. "
-    "Write semantic_text as a first-person retrospective narrative — the kind of internal monologue "
+    "It must be optimized for recall search while still being usable as injected memory context. "
+    "The first sentence must be a search-focused topic sentence: name the concrete topic, entities, concepts, "
+    "objects, product names, domain terms, and likely recall phrases a user might later ask about. "
+    "Do not let the first sentence be dominated by meta-recall framing such as remembering, checking memory, "
+    "asking whether a past conversation happened, or summarizing that a conversation occurred. "
+    "After the first sentence, write a first-person retrospective narrative — the kind of internal monologue "
     "a person would write in a personal log: '~을 시도했는데 ~해서 ~로 바꿨다', '~가 문제였고 그래서 ~를 결정했다'. "
-    "Include: what the user was trying to do, what happened or was discovered, why a decision was made, "
-    "and what changed as a result. "
+    "Include what the user was trying to do, what happened or was discovered, why a decision was made, "
+    "and what changed as a result. If the conversation is about a domain topic, keep the domain topic "
+    "as the semantic center instead of the act of recalling or searching. "
     "Forbidden styles in semantic_text: third-person observation ('사용자가 ~를 했다'), "
-    "fact-card lists (bullet-point style), meta-commentary ('이 에피소드는 ~에 관한 것이다'). "
+    "fact-card lists (bullet-point style), meta-commentary ('이 에피소드는 ~에 관한 것이다'), "
+    "and empty memory-status entries whose main content is only that memory was unclear or unavailable. "
     "Target length: 60-150 tokens. Dense and self-contained. "
 )
 
@@ -100,6 +113,7 @@ class LLMClient:
         query: str,
         candidates: list[dict],
         conversation_context: list[str] | None = None,
+        query_parse: dict | None = None,
     ) -> tuple[list[str], str]:
         """
         Curator step: filter N embedding candidates down to genuinely contextually relevant ones.
@@ -122,6 +136,13 @@ class LLMClient:
                 + "\n".join(conversation_context[-4:])
             )
 
+        parse_section = ""
+        if query_parse:
+            parse_section = (
+                "\n\nStructured retrieval query parse:\n"
+                f"{json.dumps(query_parse, ensure_ascii=False)}"
+            )
+
         response = self.client.responses.create(
             model=self.model,
             store=False,
@@ -129,19 +150,25 @@ class LLMClient:
                 "You are a memory relevance curator for a personal AI assistant. "
                 "Given the user's current utterance and candidate memory episodes, "
                 "decide which episodes are genuinely relevant to what the user is talking about RIGHT NOW. "
+                "Use the structured retrieval query parse when present: content_query is the searchable topic, "
+                "while answer_intent describes the requested response shape and should not by itself make an episode relevant. "
                 "If the current utterance is a follow-up (e.g. '더 설명해줘', '계속해줘', '아까 말한 거'), "
                 "use the recent conversation context to infer the actual topic being discussed. "
-                "Be conservative: exclude when uncertain. "
-                "A false positive (irrelevant episode injected into the response) damages conversational trust "
-                "more than a false negative (missing a relevant memory). "
+                "IMPORTANT — memory-recall questions (e.g. '기억나니?', '이야기한 적 있지', '대화한 것 기억해?'): "
+                "select episodes that contain INFORMATION ABOUT THE TOPIC being asked about. "
+                "These are exactly the cases where memory retrieval matters most — do NOT exclude on uncertainty. "
+                "For all other queries: be conservative and exclude when uncertain. "
+                "A false positive (irrelevant episode injected) damages trust more than a false negative. "
                 "Return JSON only: {\"relevant_ids\": [\"id1\", ...], \"reasoning\": \"one sentence\"}"
             ),
             input=(
                 f"User's current utterance:\n{query}"
+                f"{parse_section}"
                 f"{context_section}\n\n"
                 f"Candidate memory episodes:\n{candidates_text}\n\n"
-                "Return only the episode_ids that are genuinely relevant to this specific utterance. "
-                "When in doubt, exclude. JSON only."
+                "Return the episode_ids that are genuinely relevant. "
+                "If this is a memory-recall question, include any episode that contains information about the recalled topic. "
+                "JSON only."
             ),
         )
         content = (response.output_text or "").strip()
@@ -202,9 +229,10 @@ class LLMClient:
             instructions=(
                 "You are aiLog's episode semantic text merger. "
                 "Given two semantic texts from related episodes being merged, "
-                "synthesize a single first-person retrospective narrative that captures "
-                "the combined user goals, decisions, context, and key insights from both. "
-                "Write as a personal log entry: '~을 시도했는데 ~해서 ~로 바꿨다' style. "
+                "synthesize a single semantic_text that preserves the search-focused first sentence "
+                "and captures the combined user goals, decisions, context, and key insights from both. "
+                "The first sentence must name the concrete searchable topics, entities, concepts, "
+                "and likely recall phrases. Then write as a personal log entry: '~을 시도했는데 ~해서 ~로 바꿨다' style. "
                 "Be dense and precise. Synthesize — do not list or concatenate. "
                 "Write in the same language as the input. If the input is Korean, respond in Korean. "
                 "Target length: 60-150 tokens. "
@@ -248,9 +276,9 @@ class LLMClient:
             input=(
                 "Build semantic episodes from these turns. "
                 "A summary should describe the shared context in one concise sentence, not reproduce the dialog. "
-                "semantic_text must be a first-person retrospective narrative (personal log style), "
-                "optimized for later natural-language recall queries such as vague references, "
-                "remembered situations, or prior insights.\n\n"
+                "semantic_text must start with a search-focused topic sentence, then continue as a first-person "
+                "retrospective narrative optimized for later natural-language recall queries such as vague references, "
+                "remembered situations, prior insights, or domain topic lookups.\n\n"
                 f"{json.dumps({'turns': turns}, ensure_ascii=False)}"
             ),
         )
@@ -329,8 +357,8 @@ class LLMClient:
                 "Build semantic episodes from these gist segments. "
                 "Each gist is a compressed summary of a conversation chunk. "
                 "Group gists that share the same theme, goal, or problem into a single episode. "
-                "semantic_text must be a first-person retrospective narrative (personal log style), "
-                "optimized for natural-language recall queries.\n\n"
+                "semantic_text must start with a search-focused topic sentence, then continue as a first-person "
+                "retrospective narrative optimized for natural-language recall queries.\n\n"
                 f"{json.dumps({'gists': gist_segments}, ensure_ascii=False)}"
             ),
         )
