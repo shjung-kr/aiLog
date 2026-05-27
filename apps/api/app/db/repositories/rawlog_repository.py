@@ -22,6 +22,26 @@ class RawLogRepository:
         )
         return list(self.db.execute(stmt).scalars().all())
 
+    def list_by_session_and_speaker(
+        self, session_id: str, speaker_type: str, limit: int = 100
+    ) -> list[RawLog]:
+        stmt = (
+            select(RawLog)
+            .where(RawLog.session_id == session_id, RawLog.speaker_type == speaker_type)
+            .order_by(RawLog.sequence_no.desc())
+            .limit(limit)
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
+    def list_by_speaker(self, speaker_type: str, limit: int = 100) -> list[RawLog]:
+        stmt = (
+            select(RawLog)
+            .where(RawLog.speaker_type == speaker_type)
+            .order_by(RawLog.occurred_at.desc())
+            .limit(limit)
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
     def list_by_ids(self, rawlog_ids: list[str]) -> list[RawLog]:
         if not rawlog_ids:
             return []

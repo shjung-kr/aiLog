@@ -4,6 +4,7 @@ from app.services.retrieval_service import RetrievalService
 from app.services.rawlog_service import RawLogService
 from app.services.session_service import SessionService
 from app.services.turn_service import TurnService
+from app.services.user_style_service import UserStyleService
 from app.utils.datetime import utc_now
 
 
@@ -15,12 +16,14 @@ class ChatService:
         llm_client: LLMClient,
         turn_service: TurnService | None = None,
         retrieval_service: RetrievalService | None = None,
+        user_style_service: UserStyleService | None = None,
     ) -> None:
         self.session_service = session_service
         self.rawlog_service = rawlog_service
         self.llm_client = llm_client
         self.turn_service = turn_service
         self.retrieval_service = retrieval_service
+        self.user_style_service = user_style_service
 
     def send_message(self, payload: ChatMessageCreate):
         session_id = payload.session_id
@@ -54,10 +57,17 @@ class ChatService:
                 payload.content, session_id=session_id, recent_turns=recent_turns
             )
 
+        user_style = None
+        style_updated = False
+        if self.user_style_service is not None:
+            style_updated = self.user_style_service.consume_update_notification()
+            user_style = self.user_style_service.get_style_profile()
+
         assistant_text, source_model, sources = self.llm_client.generate_reply(
             conversation,
             memory_context=memory_context,
             use_web_search=True,
+            user_style=user_style,
         )
         assistant_message = self.rawlog_service.create_rawlog(
             session_id=session_id,
@@ -77,4 +87,4 @@ class ChatService:
         )
         if self.turn_service is not None:
             self.turn_service.create_from_pair(user_message, assistant_message)
-        return session_id, user_message, assistant_message, sources, context_used
+        return session_id, user_message, assistant_message, sources, context_used, style_updated

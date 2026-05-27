@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.repositories.episode_repository import EpisodeRepository
+from app.db.repositories.long_term_memory_repository import LongTermMemoryRepository
 from app.db.repositories.rawlog_repository import RawLogRepository
 from app.db.repositories.search_repository import SearchRepository
 from app.db.repositories.session_repository import SessionRepository
@@ -16,17 +17,20 @@ from app.services.rawlog_service import RawLogService
 from app.services.retrieval_service import RetrievalService
 from app.services.session_service import SessionService
 from app.services.turn_service import TurnService
+from app.services.user_style_service import UserStyleService
 
 router = APIRouter()
 
 
 @router.post("/messages", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
 def send_chat_message(payload: ChatMessageCreate, db: Session = Depends(get_db)) -> ChatMessageResponse:
+    rawlog_repository = RawLogRepository(db)
     session_service = SessionService(SessionRepository(db))
-    rawlog_service = RawLogService(RawLogRepository(db), session_service)
+    rawlog_service = RawLogService(rawlog_repository, session_service)
     turn_service = TurnService(TurnRepository(db), rawlog_service)
     llm_client = LLMClient()
     retrieval_service = RetrievalService(EpisodeRepository(db), rawlog_service, llm_client, SearchRepository(db))
+    user_style_service = UserStyleService(LongTermMemoryRepository(db), rawlog_repository, llm_client)
 
     try:
         chat_service = ChatService(
@@ -35,8 +39,9 @@ def send_chat_message(payload: ChatMessageCreate, db: Session = Depends(get_db))
             llm_client=llm_client,
             turn_service=turn_service,
             retrieval_service=retrieval_service,
+            user_style_service=user_style_service,
         )
-        session_id, user_message, assistant_message, sources, context_used = chat_service.send_message(payload)
+        session_id, user_message, assistant_message, sources, context_used, style_updated = chat_service.send_message(payload)
         episode_idle_scheduler.schedule(session_id)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -53,4 +58,5 @@ def send_chat_message(payload: ChatMessageCreate, db: Session = Depends(get_db))
         assistant_message=RawLogRead.model_validate(assistant_message),
         sources=[ChatSource(**source) for source in sources],
         context_used=[ChatContextItem(**item) for item in context_used],
+        style_updated=style_updated,
     )

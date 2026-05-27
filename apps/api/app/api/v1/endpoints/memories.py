@@ -6,11 +6,13 @@ from app.db.repositories.long_term_memory_repository import LongTermMemoryReposi
 from app.db.repositories.rawlog_repository import RawLogRepository
 from app.db.repositories.session_repository import SessionRepository
 from app.db.session import get_db
+from app.llm.client import LLMClient
 from app.schemas.long_term_memory import LongTermMemoryRead, PromoteResponse
 from app.services.episode_service import EpisodeService
 from app.services.memory_promotion_service import MemoryPromotionService
 from app.services.rawlog_service import RawLogService
 from app.services.session_service import SessionService
+from app.services.user_style_service import UserStyleService
 
 router = APIRouter()
 
@@ -28,6 +30,21 @@ def list_memories(limit: int = 100, db: Session = Depends(get_db)) -> list[LongT
     repo = LongTermMemoryRepository(db)
     memories = repo.list_all(limit=limit)
     return [LongTermMemoryRead.from_orm_with_metadata(m) for m in memories]
+
+
+@router.post("/analyze-style")
+def analyze_style(db: Session = Depends(get_db)) -> dict:
+    """기존 대화 전체를 분석해 사용자 스타일 프로파일을 생성/갱신한다."""
+    service = UserStyleService(
+        ltm_repository=LongTermMemoryRepository(db),
+        rawlog_repository=RawLogRepository(db),
+        llm_client=LLMClient(),
+    )
+    profile = service.analyze_and_update()
+    if profile is None:
+        return {"status": "skipped", "reason": "not enough messages"}
+    db.commit()
+    return {"status": "ok", "profile": profile}
 
 
 @router.post("/promote", response_model=PromoteResponse)

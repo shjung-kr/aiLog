@@ -22,6 +22,10 @@ class LongTermMemoryRepository:
         stmt = select(LongTermMemory).where(LongTermMemory.episode_id == episode_id)
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def get_by_memory_type(self, memory_type: str) -> LongTermMemory | None:
+        stmt = select(LongTermMemory).where(LongTermMemory.memory_type == memory_type).limit(1)
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def list_all(self, limit: int = 200) -> list[LongTermMemory]:
         stmt = (
             select(LongTermMemory)

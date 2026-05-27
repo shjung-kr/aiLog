@@ -47,6 +47,8 @@ _SEMANTIC_TEXT_INSTRUCTION = (
     "It must be optimized for recall search while still being usable as injected memory context. "
     "The first sentence must be a search-focused topic sentence: name the concrete topic, entities, concepts, "
     "objects, product names, domain terms, and likely recall phrases a user might later ask about. "
+    "CRITICAL: preserve the exact Korean terms and nouns from the conversation (e.g. '특허', '특허성', '특허 출원' "
+    "must appear verbatim if the conversation used them — do not paraphrase to '차별점' or '포지셔닝'). "
     "Do not let the first sentence be dominated by meta-recall framing such as remembering, checking memory, "
     "asking whether a past conversation happened, or summarizing that a conversation occurred. "
     "After the first sentence, write a first-person retrospective narrative — the kind of internal monologue "
@@ -69,18 +71,87 @@ class LLMClient:
         self.model = settings.openai_model
         self.embedding_model = settings.openai_embedding_model
 
+    def analyze_user_style(
+        self,
+        user_messages: list[str],
+        existing_profile: dict | None = None,
+    ) -> dict | None:
+        existing_section = ""
+        if existing_profile:
+            existing_section = (
+                f"\n\nCurrently known profile (refine, don't reset):\n"
+                f"{json.dumps(existing_profile, ensure_ascii=False)}"
+            )
+
+        response = self.client.responses.create(
+            model=self.model,
+            store=False,
+            instructions=(
+                "You are a communication style analyst. "
+                "Analyze the user's messages and extract their communication style as structured JSON. "
+                "Return ONLY valid JSON with exactly these keys:\n"
+                '{\n'
+                '  "tone": "어투 설명 (e.g. 반말·간결체, 존댓말·격식체)",\n'
+                '  "logic_structure": "논리 전개 방식 (e.g. 결론 먼저 → 근거 나열)",\n'
+                '  "vocabulary": ["자주 쓰는 도메인 용어나 표현들"],\n'
+                '  "response_preference": "선호하는 응답 형식 (e.g. 간결한 서술, 개조식 목록)",\n'
+                '  "domain_expertise": ["전문성이 보이는 분야들"]\n'
+                "}\n"
+                "Base your analysis on patterns across ALL provided messages, not individual messages. "
+                "If a field is unclear from the messages, make a conservative best guess. "
+                "Write field values in Korean."
+                f"{existing_section}"
+            ),
+            input=(
+                f"Analyze the communication style from these {len(user_messages)} user messages:\n\n"
+                + "\n---\n".join(user_messages[-30:])
+            ),
+        )
+        content = (response.output_text or "").strip()
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            start, end = content.find("{"), content.rfind("}")
+            if start < 0 or end < start:
+                return None
+            try:
+                data = json.loads(content[start:end + 1])
+            except json.JSONDecodeError:
+                return None
+        return data if isinstance(data, dict) else None
+
     def generate_reply(
         self,
         rawlogs: list[RawLog],
         memory_context: str | None = None,
         use_web_search: bool = True,
+        user_style: dict | None = None,
     ) -> tuple[str, str, list[dict]]:
         instructions = SYSTEM_PROMPT
+        if user_style:
+            style_lines = []
+            if user_style.get("tone"):
+                style_lines.append(f"어투: {user_style['tone']}")
+            if user_style.get("logic_structure"):
+                style_lines.append(f"논리 전개: {user_style['logic_structure']}")
+            if user_style.get("response_preference"):
+                style_lines.append(f"응답 형식: {user_style['response_preference']}")
+            if user_style.get("domain_expertise"):
+                style_lines.append(f"전문 도메인: {', '.join(user_style['domain_expertise'])}")
+            if style_lines:
+                instructions = (
+                    f"{instructions}\n\n"
+                    "--- User style profile (반드시 이 스타일에 맞춰 응답할 것) ---\n"
+                    + "\n".join(style_lines)
+                )
         if memory_context:
             instructions = (
                 f"{instructions}\n\n"
-                "--- Background memory context (do not quote, do not reference as memory, "
-                "weave naturally or ignore if irrelevant) ---\n"
+                "--- Background memory context ---\n"
+                "This is a verified record of a past conversation. "
+                "For CASE A (user referencing a past conversation): use this context as the basis of your answer — "
+                "do NOT say you have no record when this context is present. "
+                "For CASE B (normal conversation): weave relevant details naturally without flagging it as memory.\n"
                 f"{memory_context}"
             )
 
@@ -233,6 +304,8 @@ class LLMClient:
                 "and captures the combined user goals, decisions, context, and key insights from both. "
                 "The first sentence must name the concrete searchable topics, entities, concepts, "
                 "and likely recall phrases. Then write as a personal log entry: '~을 시도했는데 ~해서 ~로 바꿨다' style. "
+                "CRITICAL: preserve exact Korean nouns and domain terms from both inputs verbatim "
+                "(e.g. '특허', '특허성', '특허 출원' must not be paraphrased to '차별점' or '포지셔닝'). "
                 "Be dense and precise. Synthesize — do not list or concatenate. "
                 "Write in the same language as the input. If the input is Korean, respond in Korean. "
                 "Target length: 60-150 tokens. "

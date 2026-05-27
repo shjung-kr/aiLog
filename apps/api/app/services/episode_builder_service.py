@@ -414,9 +414,9 @@ class EpisodeBuilderService:
 
     def _episode_semantic_text(self, episode: Episode) -> str:
         metadata = episode.metadata_json or {}
-        semantic_text = metadata.get(SEMANTIC_TEXT_METADATA_KEY)
-        if isinstance(semantic_text, str) and semantic_text.strip():
-            return semantic_text.strip()
+        semantic_text = (metadata.get(SEMANTIC_TEXT_METADATA_KEY) or "").strip()
+        if semantic_text:
+            return semantic_text
         return self._semantic_text(title=episode.title, summary=episode.summary, keywords=episode.keywords)
 
     def _title_index_text(self, episode: Episode) -> str:

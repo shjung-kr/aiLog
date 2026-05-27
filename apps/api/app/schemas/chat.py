@@ -14,6 +14,7 @@ class ChatContextItem(BaseModel):
     score: float
     start_at: str | None = None
     rawlog_ids: list[str]
+    recall_intent: bool = False
 
 
 class ChatMessageCreate(BaseModel):
@@ -30,3 +31,4 @@ class ChatMessageResponse(BaseModel):
     assistant_message: RawLogRead
     sources: list[ChatSource] = []
     context_used: list[ChatContextItem] = []
+    style_updated: bool = False

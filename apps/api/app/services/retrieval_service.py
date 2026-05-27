@@ -201,6 +201,7 @@ class RetrievalService:
                 "score": round(best_score, 4),
                 "start_at": best_episode.start_at.isoformat(),
                 "rawlog_ids": [],
+                "recall_intent": query_parse.recall_intent,
             }
         ]
         return semantic_text, context_items
@@ -271,14 +272,21 @@ class RetrievalService:
 
     def _episode_semantic_text(self, episode: Episode) -> str:
         metadata = episode.metadata_json or {}
-        semantic_text = metadata.get(SEMANTIC_TEXT_METADATA_KEY)
-        if isinstance(semantic_text, str) and semantic_text.strip():
-            return semantic_text.strip()
-        # fallback: compose from display fields
-        parts = [f"{episode.title}: {episode.summary}"]
+        semantic_text = (metadata.get(SEMANTIC_TEXT_METADATA_KEY) or "").strip()
+
+        # Always prepend title + keywords so concrete terms are preserved
+        # even if semantic_text paraphrased them into abstract language.
+        header_parts = []
+        if episode.title:
+            header_parts.append(f"주제: {episode.title}")
         if episode.keywords:
-            parts.append(", ".join(episode.keywords))
-        return " | ".join(parts)
+            header_parts.append(f"키워드: {', '.join(str(k) for k in episode.keywords)}")
+        header = "\n".join(header_parts)
+
+        if semantic_text:
+            return f"{header}\n{semantic_text}"
+        # fallback when semantic_text is missing
+        return f"{header}\n{episode.summary}" if episode.summary else header
 
     def _log(
         self,

@@ -16,6 +16,7 @@ from app.services.memory_promotion_service import MemoryPromotionService
 from app.services.rawlog_service import RawLogService
 from app.services.session_service import SessionService
 from app.services.turn_service import TurnService
+from app.services.user_style_service import UserStyleService
 
 
 class EpisodeIdleScheduler:
@@ -74,6 +75,15 @@ class EpisodeIdleScheduler:
             )
             builder.build_from_session(session_id=session_id, rebuild_existing=True)
             db.commit()
+
+            user_style_service = UserStyleService(
+                ltm_repository=ltm_repository,
+                rawlog_repository=RawLogRepository(db),
+                llm_client=llm_client,
+            )
+            if user_style_service.should_update(session_id):
+                user_style_service.analyze_and_update(session_id)
+                db.commit()
         except Exception:
             db.rollback()
         finally:
