@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 
 import Shell from '../components/shell';
-import { getMemories, promoteMemories } from '../../lib/api-client';
+import { getMemories, promoteMemories, analyzeStyle } from '../../lib/api-client';
 import type { LongTermMemoryResponse } from '../../lib/types';
 
 const MEMORY_TYPE_COLOR: Record<string, { bg: string; text: string }> = {
@@ -16,20 +16,116 @@ function typeStyle(t: string) {
   return MEMORY_TYPE_COLOR[t] ?? { bg: '#f8fafc', text: '#475569' };
 }
 
+type StyleProfile = {
+  tone?: string;
+  logic_structure?: string;
+  vocabulary?: string[];
+  response_preference?: string;
+  domain_expertise?: string[];
+  updated_at?: string;
+};
+
+function StyleProfileCard({ profile, updatedAt }: { profile: StyleProfile; updatedAt: string }) {
+  const rows: { label: string; value: string }[] = [
+    profile.tone              ? { label: '어투',       value: profile.tone } : null,
+    profile.logic_structure   ? { label: '논리 전개',   value: profile.logic_structure } : null,
+    profile.response_preference ? { label: '응답 형식', value: profile.response_preference } : null,
+  ].filter(Boolean) as { label: string; value: string }[];
+
+  const date = updatedAt
+    ? new Date(updatedAt).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })
+    : null;
+
+  return (
+    <div className="style-card">
+      <div className="style-card-header">
+        <span className="style-icon">◈</span>
+        <span className="style-title">내 스타일 프로파일</span>
+        {date && <span className="style-date">{date} 업데이트</span>}
+      </div>
+
+      <div className="style-body">
+        <div className="style-rows">
+          {rows.map((r) => (
+            <div key={r.label} className="style-row">
+              <span className="style-label">{r.label}</span>
+              <span className="style-value">{r.value}</span>
+            </div>
+          ))}
+        </div>
+
+        {(profile.vocabulary?.length || profile.domain_expertise?.length) ? (
+          <div className="style-tags-section">
+            {profile.vocabulary && profile.vocabulary.length > 0 && (
+              <div className="style-tag-group">
+                <span className="style-tag-label">주요 어휘</span>
+                <div className="style-tags">
+                  {profile.vocabulary.map((v) => (
+                    <span key={v} className="style-tag vocab">{v}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {profile.domain_expertise && profile.domain_expertise.length > 0 && (
+              <div className="style-tag-group">
+                <span className="style-tag-label">전문 도메인</span>
+                <div className="style-tags">
+                  {profile.domain_expertise.map((d) => (
+                    <span key={d} className="style-tag domain">{d}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function MemoriesPage() {
   const [memories, setMemories] = useState<LongTermMemoryResponse[]>([]);
+  const [styleProfile, setStyleProfile] = useState<StyleProfile | null>(null);
+  const [styleUpdatedAt, setStyleUpdatedAt] = useState('');
   const [loading, setLoading] = useState(true);
   const [promoting, setPromoting] = useState(false);
   const [promoteMsg, setPromoteMsg] = useState<string | null>(null);
+  const [analyzingStyle, setAnalyzingStyle] = useState(false);
+  const [styleMsg, setStyleMsg] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
     void getMemories(100)
-      .then((data) => { setMemories(data); setLoading(false); })
+      .then((data) => {
+        const styleRecord = data.find((m) => m.memory_type === 'user_style');
+        if (styleRecord) {
+          try {
+            const parsed = JSON.parse(styleRecord.memory_text) as StyleProfile;
+            setStyleProfile(parsed);
+            setStyleUpdatedAt(parsed.updated_at ?? styleRecord.created_at);
+          } catch { /* ignore */ }
+        }
+        setMemories(data.filter((m) => m.memory_type !== 'user_style'));
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }
 
   useEffect(load, []);
+
+  async function handleAnalyzeStyle() {
+    setAnalyzingStyle(true);
+    setStyleMsg(null);
+    try {
+      const res = await analyzeStyle();
+      setStyleMsg(res.status === 'ok' ? '스타일 프로파일 업데이트 완료' : '메시지가 충분하지 않습니다');
+      load();
+    } catch {
+      setStyleMsg('분석 실패');
+    } finally {
+      setAnalyzingStyle(false);
+    }
+  }
 
   async function handlePromote() {
     setPromoting(true);
@@ -53,6 +149,14 @@ export default function MemoriesPage() {
           <div className="title-row">
             <h1 className="page-title">What I remember</h1>
             <button
+              className={`promote-btn${analyzingStyle ? ' loading' : ''}`}
+              onClick={handleAnalyzeStyle}
+              disabled={analyzingStyle}
+              type="button"
+            >
+              {analyzingStyle ? '…' : '◈ 스타일 분석'}
+            </button>
+            <button
               className={`promote-btn${promoting ? ' loading' : ''}`}
               onClick={handlePromote}
               disabled={promoting}
@@ -63,9 +167,14 @@ export default function MemoriesPage() {
           </div>
           <p className="page-sub">
             {loading ? 'Loading…' : memories.length === 0 ? 'No memories yet.' : `${memories.length} memories`}
+            {styleMsg && <span className="promote-msg"> · {styleMsg}</span>}
             {promoteMsg && <span className="promote-msg"> · {promoteMsg}</span>}
           </p>
         </header>
+
+        {styleProfile && (
+          <StyleProfileCard profile={styleProfile} updatedAt={styleUpdatedAt} />
+        )}
 
         <div className="mem-grid">
           {loading ? (
@@ -123,6 +232,91 @@ export default function MemoriesPage() {
 
         <style>{`
           .page { max-width: 960px; }
+
+          /* ── Style profile card ── */
+          .style-card {
+            margin-bottom: 28px;
+            border: 1px solid #c7d2fe;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+            overflow: hidden;
+          }
+
+          .style-card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 20px;
+            border-bottom: 1px solid #c7d2fe;
+          }
+
+          .style-icon { font-size: 15px; color: #6366f1; }
+
+          .style-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #3730a3;
+            flex: 1;
+          }
+
+          .style-date {
+            font-size: 11px;
+            color: #818cf8;
+          }
+
+          .style-body {
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+
+          .style-rows { display: flex; flex-direction: column; gap: 8px; }
+
+          .style-row {
+            display: flex;
+            gap: 12px;
+            align-items: baseline;
+            font-size: 13px;
+          }
+
+          .style-label {
+            width: 72px;
+            flex-shrink: 0;
+            font-weight: 600;
+            color: #6366f1;
+            font-size: 12px;
+          }
+
+          .style-value { color: #1e293b; line-height: 1.5; }
+
+          .style-tags-section { display: flex; flex-direction: column; gap: 10px; }
+
+          .style-tag-group { display: flex; align-items: flex-start; gap: 10px; }
+
+          .style-tag-label {
+            width: 72px;
+            flex-shrink: 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: #6366f1;
+            padding-top: 3px;
+          }
+
+          .style-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+
+          .style-tag {
+            display: inline-flex;
+            align-items: center;
+            height: 22px;
+            padding: 0 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 500;
+          }
+
+          .style-tag.vocab  { background: #e0e7ff; color: #3730a3; }
+          .style-tag.domain { background: #ede9fe; color: #6d28d9; }
 
           .page-header { margin-bottom: 28px; }
 

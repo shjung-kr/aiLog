@@ -188,11 +188,12 @@ function getContext(msg: RawLogResponse) {
   const c = msg.metadata?.context_used;
   return Array.isArray(c)
     ? c.filter(
-        (x): x is { episode_id: string; title: string; score: number; start_at?: string | null } =>
+        (x): x is { episode_id: string; title: string; score: number; start_at?: string | null; recall_intent: boolean } =>
           typeof x === 'object' &&
           x !== null &&
           typeof (x as { episode_id?: unknown }).episode_id === 'string' &&
-          typeof (x as { score?: unknown }).score === 'number',
+          typeof (x as { score?: unknown }).score === 'number' &&
+          (x as { recall_intent?: unknown }).recall_intent === true,
       )
     : [];
 }
@@ -313,6 +314,8 @@ export default function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [status, setStatus]     = useState('Ready');
   const [isSending, setIsSending] = useState(false);
+  const [styleToast, setStyleToast] = useState(false);
+  const styleToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const initializedRef = useRef(false);
   const streamRef      = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -364,8 +367,11 @@ export default function ChatPage() {
     if (isSending) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [isSending]);
 
-  /* ── cleanup stream on unmount ── */
-  useEffect(() => () => { if (streamRef.current) clearInterval(streamRef.current); }, []);
+  /* ── cleanup stream and toast timer on unmount ── */
+  useEffect(() => () => {
+    if (streamRef.current) clearInterval(streamRef.current);
+    if (styleToastTimerRef.current) clearTimeout(styleToastTimerRef.current);
+  }, []);
 
   /* ── stream assistant reply character by character ── */
   function streamReply(msg: RawLogResponse) {
@@ -440,6 +446,12 @@ export default function ChatPage() {
         res.user_message,
       ]);
 
+      if (res.style_updated) {
+        setStyleToast(true);
+        if (styleToastTimerRef.current) clearTimeout(styleToastTimerRef.current);
+        styleToastTimerRef.current = setTimeout(() => setStyleToast(false), 4000);
+      }
+
       setIsSending(false);
       setStatus('');
       streamReply(res.assistant_message);
@@ -501,6 +513,13 @@ export default function ChatPage() {
           </div>
         </div>
       </aside>
+
+      {styleToast && (
+        <div className="style-toast">
+          <span className="style-toast-icon">◈</span>
+          스타일 프로파일이 업데이트됐습니다
+        </div>
+      )}
 
       {/* ── Chat panel ── */}
       <section className="chat-panel">
@@ -1500,6 +1519,35 @@ export default function ChatPage() {
           .conversation { padding: 16px 12px 180px; }
           .topbar-nav { gap: 4px; }
           .topbar-link { padding: 0 10px; font-size: 12px; }
+        }
+
+        /* ── Style toast ── */
+        .style-toast {
+          position: fixed;
+          bottom: 88px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 100;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 18px;
+          border-radius: 999px;
+          background: #1e293b;
+          color: #e2e8f0;
+          font-size: 13px;
+          font-weight: 500;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+          animation: toastIn 0.25s ease-out both;
+          pointer-events: none;
+          white-space: nowrap;
+        }
+
+        .style-toast-icon { color: #818cf8; font-size: 14px; }
+
+        @keyframes toastIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
       `}</style>
     </main>

@@ -89,3 +89,7 @@ export function getMemories(limit = 100): Promise<LongTermMemoryResponse[]> {
 export function promoteMemories(): Promise<PromoteResponse> {
   return request<PromoteResponse>('/api/v1/memories/promote', { method: 'POST' });
 }
+
+export function analyzeStyle(): Promise<{ status: string; profile?: Record<string, unknown> }> {
+  return request('/api/v1/memories/analyze-style', { method: 'POST' });
+}

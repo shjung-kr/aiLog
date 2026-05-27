@@ -71,7 +71,9 @@ export type ChatMessageResponse = {
     score: number;
     start_at?: string | null;
     rawlog_ids: string[];
+    recall_intent: boolean;
   }>;
+  style_updated: boolean;
 };
 
 export type EpisodeResponse = {
