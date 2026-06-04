@@ -73,8 +73,8 @@ You don't need to remember what you said — or even how you said it.
 
 | You want to find... | You might search... | Keyword search | aiLog |
 |---|---|---|---|
-| A past discussion about heat capacity | "비열" | ✅ exact match only | ✅ also finds "열 전달", "온도 변화 속도", related physics discussions |
-| An idea about memory architecture | "episode" | ✅ if you used that word | ✅ finds it even if you called it "기억 단위" or "대화 덩어리" |
+| A past discussion about heat capacity | "specific heat" | ✅ exact match only | ✅ also finds "thermal transfer", "rate of temperature change", related physics discussions |
+| An idea about memory architecture | "episode" | ✅ if you used that word | ✅ finds it even if you called it "memory unit" or "conversation chunk" |
 | A creative phrasing you used once | anything paraphrased | ❌ | ✅ embedding similarity surfaces it |
 
 ### How it works
