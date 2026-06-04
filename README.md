@@ -100,6 +100,28 @@ Retrieval isn't a search bar the user opens. It's triggered *during conversation
 
 ---
 
+## Privacy by Design — Local-First Architecture
+
+Your conversation data never touches a cloud storage system.
+
+aiLog is built on a **local-first principle**: all conversation history is stored and processed on your own machine. The only data that leaves your environment is what you explicitly send to an LLM API — and that's inherent to how any LLM works, not a choice aiLog makes.
+
+```
+your machine                          external
+─────────────────────────────         ──────────────
+ conversations                         LLM API
+ episodes            ── prompt ──▶    (OpenAI, etc.)
+ long-term memory   ◀── response ──
+ vector index
+ (all local)
+```
+
+To make this work cleanly, aiLog adopts **MCP (Model Context Protocol)** as its integration layer. MCP allows aiLog to connect with LLM providers in a standardized way — without routing your stored data through any third-party platform.
+
+The result: the intelligence of external LLMs, with the privacy of a local system.
+
+---
+
 ## Tech Stack
 
 | Layer | Choice | Rationale |
