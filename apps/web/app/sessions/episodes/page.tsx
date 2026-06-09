@@ -4,8 +4,8 @@ import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-import { getEpisodes, getSessions } from '../../lib/api-client';
-import type { EpisodeResponse, SessionResponse } from '../../lib/types';
+import { getEpisodes, getSessions } from '../../../lib/api-client';
+import type { EpisodeResponse, SessionResponse } from '../../../lib/types';
 
 export default function EpisodesPage() {
   const [episodes, setEpisodes] = useState<EpisodeResponse[]>([]);

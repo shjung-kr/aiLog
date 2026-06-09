@@ -7,6 +7,7 @@ from app.db.repositories.rawlog_repository import RawLogRepository
 from app.db.repositories.session_repository import SessionRepository
 from app.db.session import get_db
 from app.llm.client import LLMClient
+from app.core.security import verify_api_key
 from app.schemas.long_term_memory import LongTermMemoryRead, PromoteResponse
 from app.services.episode_service import EpisodeService
 from app.services.memory_promotion_service import MemoryPromotionService
@@ -32,7 +33,7 @@ def list_memories(limit: int = 100, db: Session = Depends(get_db)) -> list[LongT
     return [LongTermMemoryRead.from_orm_with_metadata(m) for m in memories]
 
 
-@router.post("/analyze-style")
+@router.post("/analyze-style", dependencies=[Depends(verify_api_key)])
 def analyze_style(db: Session = Depends(get_db)) -> dict:
     """기존 대화 전체를 분석해 사용자 스타일 프로파일을 생성/갱신한다."""
     service = UserStyleService(
@@ -47,7 +48,7 @@ def analyze_style(db: Session = Depends(get_db)) -> dict:
     return {"status": "ok", "profile": profile}
 
 
-@router.post("/promote", response_model=PromoteResponse)
+@router.post("/promote", response_model=PromoteResponse, dependencies=[Depends(verify_api_key)])
 def promote_memories(db: Session = Depends(get_db)) -> PromoteResponse:
     """Scan all episodes and promote eligible ones to long-term memory."""
     service = _build_promotion_service(db)

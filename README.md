@@ -45,7 +45,7 @@ aiLog organizes conversation data into four semantic layers:
 
 ### Backend Pipeline
 
-```
+```text
 ingestion → segmentation → gist generation → episode construction → memory promotion → retrieval → reinjection
 ```
 
@@ -81,7 +81,7 @@ You don't need to remember what you said — or even how you said it.
 
 aiLog doesn't search raw messages — it searches **episodes**: meaning-level units extracted and embedded from conversation segments.
 
-```
+```text
 raw messages → segmentation → gist extraction → episode embedding → vector index
                                                                           ↓
                                                               cosine similarity search
@@ -93,8 +93,8 @@ raw messages → segmentation → gist extraction → episode embedding → vect
 
 Two retrieval modes work in combination:
 
-- **Semantic search** (pgvector): finds episodes by meaning, not keywords — using cosine similarity over sentence embeddings
-- **Full-text search** (PostgreSQL FTS): catches exact terms, names, and precise expressions
+- **Semantic search**: finds episodes by meaning, not keywords — currently through metadata embeddings and application-level hybrid ranking, with a path to pgvector.
+- **Full-text search**: catches exact terms, names, and precise expressions. The `app/search` module isolates this logic so it can be replaced by PostgreSQL FTS queries.
 
 Retrieval isn't a search bar the user opens. It's triggered *during conversation* — when the LLM detects a natural reference to prior context and pulls only what's relevant.
 
@@ -106,7 +106,7 @@ Your conversation data never touches a cloud storage system.
 
 aiLog is built on a **local-first principle**: all conversation history is stored and processed on your own machine. The only data that leaves your environment is what you explicitly send to an LLM API — and that's inherent to how any LLM works, not a choice aiLog makes.
 
-```
+```text
 your machine                          external
 ─────────────────────────────         ──────────────
  conversations                         LLM API
@@ -127,18 +127,109 @@ The result: the intelligence of external LLMs, with the privacy of a local syste
 | Layer | Choice | Rationale |
 |---|---|---|
 | Frontend | Next.js | Chat interface + search experience |
-| Database | PostgreSQL | Structured conversation storage |
-| Search | pgvector + Full-Text Search | Semantic + keyword retrieval |
+| API | FastAPI | Python service boundary for ingestion, retrieval, and LLM calls |
+| Database | PostgreSQL + pgvector | Structured local storage with a vector-search path |
 | ORM | SQLAlchemy | Flexible conversation data management |
+| Migration | Alembic | Controlled schema evolution |
 | Future | OpenSearch / Qdrant | When retrieval complexity scales |
 
-The stack is intentionally lean for the first stage. The architecture is designed to scale search infrastructure independently as retrieval demands grow.
+The local development PostgreSQL instance is exposed on `127.0.0.1:5433` to avoid conflicts with an existing PostgreSQL on `5432`.
 
 ---
 
 ## Project Status
 
 aiLog is in active development. The current focus is on the episode memory layer and conversational retrieval — detecting natural references to prior conversations during dialogue and surfacing only what's relevant.
+
+---
+
+## Development
+
+Install backend dependencies:
+
+```bash
+python -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+```
+
+Install frontend dependencies:
+
+```bash
+cd apps/web
+npm install
+```
+
+Create local environment values:
+
+```bash
+cp .env.example .env
+```
+
+Run both services:
+
+```bash
+npm run dev
+```
+
+This starts the aiLog PostgreSQL container first, waits for it to accept connections, then starts the API and web app. The default database URL is:
+
+```text
+postgresql+psycopg://postgres:postgres@127.0.0.1:5433/ailog
+```
+
+If you already started PostgreSQL yourself, skip automatic DB startup:
+
+```bash
+SKIP_DB_START=1 DEV_DATABASE_URL=postgresql+psycopg://user:password@host:port/ailog npm run dev
+```
+
+DB helpers:
+
+```bash
+npm run db:up
+npm run db:down
+npm run db:logs
+```
+
+---
+
+## Database Migrations
+
+Alembic is configured in `apps/api/alembic.ini`.
+
+```bash
+cd apps/api
+alembic upgrade head
+```
+
+`Base.metadata.create_all()` still runs at API startup for local development convenience, but schema changes should be captured as Alembic revisions.
+
+---
+
+## Admin API Protection
+
+Set `AILOG_ADMIN_API_KEY` in `.env` to protect mutation-heavy or costly admin endpoints such as memory promotion, style analysis, title embedding backfill, and background job retry.
+
+Frontend calls can pass the same key with:
+
+```bash
+NEXT_PUBLIC_AILOG_API_KEY=...
+```
+
+---
+
+## Web Search Control
+
+Chat requests accept `use_web_search`. If omitted, `CHAT_WEB_SEARCH_DEFAULT` controls the default. Memory recall answers with retrieved context automatically disable web search so the assistant does not replace personal memory with general web results.
+
+---
+
+## Verification
+
+```bash
+npm run test:api
+npm run build
+```
 
 ---
 

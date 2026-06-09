@@ -1,6 +1,6 @@
 import json
 
-from openai import OpenAI
+from openai import AuthenticationError, OpenAI, OpenAIError
 
 from app.core.config import settings
 from app.db.models.rawlog import RawLog
@@ -266,10 +266,15 @@ class LLMClient:
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        response = self.client.embeddings.create(
-            model=self.embedding_model,
-            input=texts,
-        )
+        try:
+            response = self.client.embeddings.create(
+                model=self.embedding_model,
+                input=texts,
+            )
+        except AuthenticationError as exc:
+            raise RuntimeError("OpenAI API key is invalid or expired. Update OPENAI_API_KEY and restart the API.") from exc
+        except OpenAIError as exc:
+            raise RuntimeError(f"OpenAI embedding request failed: {exc}") from exc
         return [item.embedding for item in response.data]
 
     def _extract_sources(self, response) -> list[dict]:

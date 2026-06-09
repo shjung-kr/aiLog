@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "api"))
 
 from app.core.config import settings
+from psycopg.types.json import Json
 from sqlalchemy import create_engine, text
 
 SQLITE_PATH = Path(__file__).resolve().parents[1] / "apps" / "api" / "ailog.db"
@@ -90,6 +91,13 @@ def parse_json(value):
         return value
 
 
+def adapt_json(value):
+    parsed = parse_json(value)
+    if parsed is None:
+        return None
+    return Json(parsed)
+
+
 def migrate():
     if not SQLITE_PATH.exists():
         print(f"SQLite 파일 없음: {SQLITE_PATH}")
@@ -131,7 +139,7 @@ def migrate():
                 record = {}
                 for col in columns:
                     val = row[col] if col in row.keys() else None
-                    record[col] = parse_json(val) if col in json_cols else val
+                    record[col] = adapt_json(val) if col in json_cols else val
                 batch.append(record)
 
             pg_conn.execute(insert_sql, batch)

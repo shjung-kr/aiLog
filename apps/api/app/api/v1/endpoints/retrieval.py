@@ -17,23 +17,24 @@ router = APIRouter()
 
 @router.post("", response_model=RetrievalResponse)
 def retrieve(payload: RetrievalRequest, db: Session = Depends(get_db)) -> RetrievalResponse:
-    session_service = SessionService(SessionRepository(db))
-    rawlog_service = RawLogService(RawLogRepository(db), session_service)
-    llm_client = LLMClient()
-    retrieval_service = RetrievalService(
-        EpisodeRepository(db),
-        rawlog_service,
-        llm_client,
-        SearchRepository(db),
-    )
-
     try:
+        session_service = SessionService(SessionRepository(db))
+        rawlog_service = RawLogService(RawLogRepository(db), session_service)
+        llm_client = LLMClient()
+        retrieval_service = RetrievalService(
+            EpisodeRepository(db),
+            rawlog_service,
+            llm_client,
+            SearchRepository(db),
+        )
         semantic_text, context_items = retrieval_service.retrieve_for_query(
             payload.query,
             session_id=payload.session_id,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     return RetrievalResponse(
         query=payload.query,

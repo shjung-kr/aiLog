@@ -18,18 +18,17 @@ router = APIRouter()
 
 @router.post("", response_model=ReinjectionResponse)
 def reinject(payload: ReinjectionRequest, db: Session = Depends(get_db)) -> ReinjectionResponse:
-    session_service = SessionService(SessionRepository(db))
-    rawlog_service = RawLogService(RawLogRepository(db), session_service)
-    llm_client = LLMClient()
-    retrieval_service = RetrievalService(
-        EpisodeRepository(db),
-        rawlog_service,
-        llm_client,
-        SearchRepository(db),
-    )
-    reinjection_service = ReinjectionService(retrieval_service)
-
     try:
+        session_service = SessionService(SessionRepository(db))
+        rawlog_service = RawLogService(RawLogRepository(db), session_service)
+        llm_client = LLMClient()
+        retrieval_service = RetrievalService(
+            EpisodeRepository(db),
+            rawlog_service,
+            llm_client,
+            SearchRepository(db),
+        )
+        reinjection_service = ReinjectionService(retrieval_service)
         injected_context, episodes = reinjection_service.build_injected_context(
             payload.query,
             session_id=payload.session_id,
@@ -37,6 +36,8 @@ def reinject(payload: ReinjectionRequest, db: Session = Depends(get_db)) -> Rein
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     return ReinjectionResponse(
         query=payload.query,

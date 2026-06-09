@@ -23,6 +23,7 @@ class ChatMessageCreate(BaseModel):
     title: str | None = None
     content: str
     metadata: dict | None = None
+    use_web_search: bool | None = None
 
 
 class ChatMessageResponse(BaseModel):

@@ -9,6 +9,7 @@ from app.db.repositories.session_repository import SessionRepository
 from app.db.repositories.turn_repository import TurnRepository
 from app.db.session import get_db
 from app.llm.client import LLMClient
+from app.core.security import verify_api_key
 from app.schemas.episode import EpisodeBuildRequest, EpisodeCreate, EpisodeRead
 from app.services.episode_builder_service import TITLE_EMBEDDING_METADATA_KEY
 from app.schemas.rawlog import RawLogRead
@@ -101,29 +102,18 @@ def list_episodes(
     return [_serialize_episode(episode_service, episode) for episode in episodes]
 
 
-@router.get("/{episode_id}/rawlogs", response_model=list[RawLogRead])
-def list_episode_rawlogs(episode_id: str, db: Session = Depends(get_db)) -> list[RawLogRead]:
-    episode_service = _build_service(db)
-    try:
-        episode_service.require_episode(episode_id)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    rawlogs = EpisodeRepository(db).list_rawlogs(episode_id)
-    return [RawLogRead.model_validate(r) for r in rawlogs]
+@router.get("/background-status/{session_id}")
+def read_background_status(session_id: str) -> dict:
+    return episode_idle_scheduler.get_status(session_id)
 
 
-@router.get("/{episode_id}", response_model=EpisodeRead)
-def read_episode(episode_id: str, db: Session = Depends(get_db)) -> EpisodeRead:
-    episode_service = _build_service(db)
-    try:
-        episode = episode_service.require_episode(episode_id)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    return _serialize_episode(episode_service, episode)
+@router.post("/background-status/{session_id}/retry", dependencies=[Depends(verify_api_key)])
+def retry_background_job(session_id: str) -> dict:
+    episode_idle_scheduler.retry_now(session_id)
+    return episode_idle_scheduler.get_status(session_id)
 
 
-@router.post("/backfill-title-embeddings", status_code=status.HTTP_200_OK)
+@router.post("/backfill-title-embeddings", status_code=status.HTTP_200_OK, dependencies=[Depends(verify_api_key)])
 def backfill_title_embeddings(db: Session = Depends(get_db)) -> dict:
     """Generate title_embedding for episodes that are missing it."""
     episode_service = _build_service(db)
@@ -148,7 +138,34 @@ def backfill_title_embeddings(db: Session = Depends(get_db)) -> dict:
     return {"updated": updated, "total": len(episodes)}
 
 
-@router.post("/build-from-session/{session_id}", response_model=list[EpisodeRead], status_code=status.HTTP_201_CREATED)
+@router.get("/{episode_id}/rawlogs", response_model=list[RawLogRead])
+def list_episode_rawlogs(episode_id: str, db: Session = Depends(get_db)) -> list[RawLogRead]:
+    episode_service = _build_service(db)
+    try:
+        episode_service.require_episode(episode_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    rawlogs = EpisodeRepository(db).list_rawlogs(episode_id)
+    return [RawLogRead.model_validate(r) for r in rawlogs]
+
+
+@router.get("/{episode_id}", response_model=EpisodeRead)
+def read_episode(episode_id: str, db: Session = Depends(get_db)) -> EpisodeRead:
+    episode_service = _build_service(db)
+    try:
+        episode = episode_service.require_episode(episode_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return _serialize_episode(episode_service, episode)
+
+
+@router.post(
+    "/build-from-session/{session_id}",
+    response_model=list[EpisodeRead],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(verify_api_key)],
+)
 def build_episodes_from_session(
     session_id: str,
     payload: EpisodeBuildRequest | None = None,

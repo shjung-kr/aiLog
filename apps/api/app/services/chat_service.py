@@ -1,3 +1,4 @@
+from app.core.config import settings
 from app.llm.client import LLMClient
 from app.schemas.chat import ChatMessageCreate
 from app.services.retrieval_service import RetrievalService
@@ -63,10 +64,18 @@ class ChatService:
             style_updated = self.user_style_service.consume_update_notification()
             user_style = self.user_style_service.get_style_profile()
 
+        use_web_search = (
+            payload.use_web_search
+            if payload.use_web_search is not None
+            else settings.chat_web_search_default
+        )
+        if context_used and any(item.get("recall_intent") for item in context_used):
+            use_web_search = False
+
         assistant_text, source_model, sources = self.llm_client.generate_reply(
             conversation,
             memory_context=memory_context,
-            use_web_search=True,
+            use_web_search=use_web_search,
             user_style=user_style,
         )
         assistant_message = self.rawlog_service.create_rawlog(
@@ -82,7 +91,7 @@ class ChatService:
                 "sources": sources,
                 "context_used": context_used,
                 "memory_context_used": bool(context_used),
-                "web_search_enabled": True,
+                "web_search_enabled": use_web_search,
             },
         )
         if self.turn_service is not None:
