@@ -7,6 +7,8 @@ import type {
   PromoteResponse,
   RawLogCreateRequest,
   RawLogResponse,
+  RetrievalRequest,
+  RetrievalResponse,
   SessionCreateRequest,
   SessionListResponse,
   SessionRawLogsResponse,
@@ -14,12 +16,14 @@ import type {
 } from './types';
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const apiKey = process.env.NEXT_PUBLIC_AILOG_API_KEY || '';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(apiKey ? { 'X-aiLog-API-Key': apiKey } : {}),
       ...(init?.headers || {}),
     },
     cache: 'no-store',
@@ -92,4 +96,11 @@ export function promoteMemories(): Promise<PromoteResponse> {
 
 export function analyzeStyle(): Promise<{ status: string; profile?: Record<string, unknown> }> {
   return request('/api/v1/memories/analyze-style', { method: 'POST' });
+}
+
+export function retrieveMemory(payload: RetrievalRequest): Promise<RetrievalResponse> {
+  return request<RetrievalResponse>('/api/v1/retrieval', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }

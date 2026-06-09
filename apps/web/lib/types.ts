@@ -55,6 +55,7 @@ export type ChatMessageRequest = {
   title?: string;
   content: string;
   metadata?: Record<string, unknown> | null;
+  use_web_search?: boolean | null;
 };
 
 export type ChatMessageResponse = {
@@ -110,4 +111,21 @@ export type PromoteResponse = {
   promoted: number;
   updated: number;
   total_long_term_memories: number;
+};
+
+export type RetrievalRequest = {
+  query: string;
+  session_id?: string | null;
+};
+
+export type RetrievalResponse = {
+  query: string;
+  semantic_text: string | null;
+  episodes: Array<{
+    episode_id: string;
+    title: string;
+    score: number;
+    start_at?: string | null;
+    rawlog_ids: string[];
+  }>;
 };
