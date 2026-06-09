@@ -6,6 +6,8 @@
 
 aiLog is a long-term memory architecture for LLM interactions — not just a chat logger, but a system that extracts, structures, and retrieves *meaning* across sessions.
 
+For setup and day-to-day commands, see [USAGE.md](./USAGE.md).
+
 ---
 
 ## The Problem
