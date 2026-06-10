@@ -31,6 +31,9 @@ Each conversation is processed into a structured memory hierarchy — from raw l
 > Retrieving memory is not showing past conversations.  
 > It is briefly bringing back the past meaning needed for the current conversation.
 
+This demo shows how a lost discussion context can be reconstructed through a brief user clarification.
+https://github.com/shjung-kr/ailog/docs/demo.mp4
+
 ---
 
 ### Memory Architecture
