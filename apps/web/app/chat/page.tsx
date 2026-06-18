@@ -485,7 +485,7 @@ export default function ChatPage() {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <div className="brand-logo">aL</div>
-          <span className="brand-name">aiLog</span>
+          <span className="brand-name">aiLog v0.1.1</span>
         </div>
 
         <button className="new-chat-btn" onClick={handleReset} type="button">
