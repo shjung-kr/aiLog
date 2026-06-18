@@ -47,6 +47,7 @@ _FAILED_RECALL_RE = re.compile(
 )
 META_RECALL_PENALTY = 0.12
 
+from app.core.config import settings
 from app.db.models.episode import Episode
 from app.db.models.search_log import SearchLog
 from app.db.repositories.episode_repository import EpisodeRepository
@@ -61,7 +62,7 @@ from app.utils.ids import new_id
 EMBEDDING_METADATA_KEY = "semantic_embedding"
 TITLE_EMBEDDING_METADATA_KEY = "title_embedding"
 SEMANTIC_TEXT_METADATA_KEY = "semantic_text"
-RETRIEVAL_SCORE_THRESHOLD = 0.35
+RETRIEVAL_SCORE_THRESHOLD = settings.retrieval_score_threshold
 RETRIEVAL_CANDIDATE_LIMIT = 12
 KEYWORD_BOOST_WEIGHT = 0.15  # hybrid: 85% embedding + 15% keyword overlap
 
@@ -90,7 +91,12 @@ class RetrievalService:
         self.llm_client = llm_client
         self.search_repository = search_repository
         self.fulltext_search = FullTextSearch()
-        self.hybrid_search = HybridSearch(fulltext_search=self.fulltext_search, keyword_weight=KEYWORD_BOOST_WEIGHT)
+        self.hybrid_search = HybridSearch(
+            fulltext_search=self.fulltext_search,
+            keyword_weight=KEYWORD_BOOST_WEIGHT,
+            keyword_weight_tech=settings.retrieval_keyword_weight_tech,
+            tech_boost_weight=settings.retrieval_tech_boost_weight,
+        )
 
     def retrieve_for_query(
         self,
@@ -107,6 +113,7 @@ class RetrievalService:
         embedding_query = self._build_embedding_query(query_parse, recent_turns)
         query_embedding = self.llm_client.embed_texts([embedding_query])[0]
         query_tokens = self.fulltext_search.tokenize(query_parse.content_query or query)
+        tech_query_tokens = self.fulltext_search.extract_tech_tokens(query_tokens)
 
         episodes = [
             episode
@@ -122,6 +129,8 @@ class RetrievalService:
             title_embedding_key=TITLE_EMBEDDING_METADATA_KEY,
             threshold=RETRIEVAL_SCORE_THRESHOLD,
             limit=RETRIEVAL_CANDIDATE_LIMIT,
+            tech_query_tokens=tech_query_tokens or None,
+            recall_intent=query_parse.recall_intent,
         )
 
         ranked = [(result.score, result.episode) for result in ranked_results]
@@ -244,6 +253,12 @@ class RetrievalService:
 
     def _build_embedding_query(self, query_parse: RetrievalQueryParse, recent_turns: list[str] | None) -> str:
         embedding_text = query_parse.content_query or query_parse.original_query
+
+        # recall_intent이고 파싱 후 토큰이 너무 짧아진 경우 원본 맥락 복원
+        if query_parse.recall_intent:
+            token_count = len(_TOKEN_RE.findall(embedding_text))
+            if token_count <= 1 and query_parse.original_query != embedding_text:
+                embedding_text = f"{query_parse.original_query} {embedding_text}".strip()
 
         if not recent_turns:
             return embedding_text

@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
+from app.core.logging import configure_logging
 from app.db.base import Base
 from app.db.session import engine
 import app.db.models  # noqa: F401
+
+configure_logging()
 
 app = FastAPI(title="aiLog API")
 app.add_middleware(

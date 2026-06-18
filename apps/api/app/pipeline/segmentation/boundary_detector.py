@@ -1,4 +1,7 @@
+import logging
 import math
+
+logger = logging.getLogger(__name__)
 
 
 class BoundaryDetector:
@@ -13,16 +16,28 @@ class BoundaryDetector:
 
         boundaries = [0]
         current_segment_start = 0
+        similarities: list[str] = []
 
         for i in range(1, len(embeddings)):
             segment_size = i - current_segment_start
-            is_topic_shift = self._cosine_similarity(embeddings[i - 1], embeddings[i]) < self.threshold
+            sim = self._cosine_similarity(embeddings[i - 1], embeddings[i])
+            similarities.append(f"{sim:.3f}")
+            is_topic_shift = sim < self.threshold
             is_max_reached = segment_size >= self.max_segment_size
 
             if is_topic_shift or is_max_reached:
+                reason = "topic_shift" if is_topic_shift else "max_size"
+                logger.debug("boundary at turn=%d sim=%.3f reason=%s", i, sim, reason)
                 boundaries.append(i)
                 current_segment_start = i
 
+        logger.info(
+            "[boundary] turns=%d segments=%d boundaries=%s similarities=[%s]",
+            len(embeddings),
+            len(boundaries),
+            boundaries,
+            ", ".join(similarities),
+        )
         return boundaries
 
     def _cosine_similarity(self, a: list[float], b: list[float]) -> float:

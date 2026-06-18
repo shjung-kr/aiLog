@@ -17,6 +17,10 @@ class Settings:
     chat_web_search_default = os.getenv("CHAT_WEB_SEARCH_DEFAULT", "true").lower() in {"1", "true", "yes", "on"}
     gist_boundary_threshold = float(os.getenv("GIST_BOUNDARY_THRESHOLD", "0.75"))
     gist_max_segment_size = int(os.getenv("GIST_MAX_SEGMENT_SIZE", "8"))
+    memory_decay_threshold = float(os.getenv("MEMORY_DECAY_THRESHOLD", "0.3"))
+    retrieval_score_threshold = float(os.getenv("RETRIEVAL_SCORE_THRESHOLD", "0.30"))
+    retrieval_keyword_weight_tech = float(os.getenv("RETRIEVAL_KEYWORD_WEIGHT_TECH", "0.35"))
+    retrieval_tech_boost_weight = float(os.getenv("RETRIEVAL_TECH_BOOST_WEIGHT", "0.08"))
 
 
 settings = Settings()

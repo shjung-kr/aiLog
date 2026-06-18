@@ -104,6 +104,15 @@ class EpisodeRepository:
         )
         return list(self.db.execute(stmt).scalars().all())
 
+    def list_below_score(self, threshold: float, limit: int = 1000) -> list[Episode]:
+        stmt = (
+            select(Episode)
+            .where(Episode.importance_score.is_not(None), Episode.importance_score < threshold)
+            .order_by(Episode.importance_score.asc())
+            .limit(limit)
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
     def list_rawlogs(self, episode_id: str) -> list[RawLog]:
         stmt = (
             select(RawLog)

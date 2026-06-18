@@ -1,5 +1,9 @@
+import logging
+
 from app.core.config import settings
 from app.db.models.gist import Gist
+
+logger = logging.getLogger(__name__)
 from app.db.repositories.gist_repository import GistRepository
 from app.llm.client import LLMClient
 from app.pipeline.gist.gist_generator import GistGenerator
@@ -58,11 +62,15 @@ class GistService:
             })
 
         segments = self._segment_turns(turn_dicts)
+        logger.info("[gist] session=%s turns=%d segments=%d", session_id, len(turn_dicts), len(segments))
+
         gist_datas = self.generator.generate_batch(segments)
 
         gists: list[Gist] = []
+        failed = 0
         for segment, gist_data in zip(segments, gist_datas):
             if not self.validator.is_valid(gist_data):
+                failed += 1
                 continue
 
             rawlog_ids: list[str] = []
@@ -90,6 +98,8 @@ class GistService:
             )
             gists.append(gist)
 
+        logger.info("[gist] session=%s gists_created=%d gists_failed=%d", session_id, len(gists), failed)
+
         if not gists:
             return []
 
@@ -102,12 +112,15 @@ class GistService:
         ]
         try:
             embeddings = self.llm_client.embed_texts(turn_texts)
-            return self.segmenter.segment_with_boundaries(
+            segments = self.segmenter.segment_with_boundaries(
                 turn_dicts,
                 embeddings,
                 threshold=settings.gist_boundary_threshold,
             )
+            logger.debug("[gist:segment] method=boundary_detector threshold=%.2f", settings.gist_boundary_threshold)
+            return segments
         except Exception:
+            logger.warning("[gist:segment] boundary detection failed, falling back to fixed window")
             return self.segmenter.segment(turn_dicts)
 
     def list_for_session(self, session_id: str) -> list[Gist]:

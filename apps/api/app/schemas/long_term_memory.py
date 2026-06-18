@@ -35,3 +35,9 @@ class PromoteResponse(BaseModel):
     promoted: int
     updated: int
     total_long_term_memories: int
+
+
+class DecayResponse(BaseModel):
+    deleted: int
+    protected: int
+    threshold: float

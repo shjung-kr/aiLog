@@ -1,7 +1,10 @@
+import logging
 import re
 from math import sqrt
 
 from app.db.models.episode import Episode
+
+logger = logging.getLogger(__name__)
 from app.llm.client import LLMClient
 from app.pipeline.episode.episode_builder import (
     EMBEDDING_SOURCE_VERSION,
@@ -155,12 +158,22 @@ class EpisodeBuilderService:
             valid_rawlog_ids = {rawlog.rawlog_id for rawlog in rawlogs}
             built_episodes = self.episode_builder.build(llm_turns=llm_turns, valid_rawlog_ids=valid_rawlog_ids)
 
+        logger.info(
+            "[episode] session=%s source=%s built=%d existing=%d",
+            session_id,
+            "gists" if gists else "turns",
+            len(built_episodes),
+            len(existing_episodes),
+        )
+
         # Freeze the merge candidate pool so episodes created during this run
         # cannot become unintended merge targets for later items in the same loop.
         merge_candidate_pool: list[Episode] = list(existing_episodes)
 
         episodes: list[Episode] = []
         matched_session_ep_ids: set[str] = set()
+        created_count = 0
+        merged_count = 0
 
         for item in built_episodes:
             matching_episode = self._find_matching_episode(
@@ -193,13 +206,29 @@ class EpisodeBuilderService:
                         **item.metadata,
                     },
                 )
+                logger.info(
+                    "[episode:create] session=%s episode_id=%s title=%r importance=%.2f",
+                    session_id,
+                    episode.episode_id,
+                    episode.title[:60],
+                    episode.importance_score or 0.0,
+                )
                 self._store_episode_embedding(episode)
+                created_count += 1
                 # Add to existing_episodes for rawlog-range uniqueness tracking only.
                 # Do NOT add to merge_candidate_pool — the pool is frozen for this run.
                 existing_episodes.append(episode)
             else:
                 if matching_episode.episode_id in session_ep_ids_before:
                     matched_session_ep_ids.add(matching_episode.episode_id)
+                logger.info(
+                    "[episode:merge] session=%s episode_id=%s title=%r score=%.3f method=%s",
+                    session_id,
+                    matching_episode.episode_id,
+                    matching_episode.title[:60],
+                    self._last_match_score,
+                    self._last_match_method,
+                )
                 old_semantic_text = self._episode_semantic_text(matching_episode)
                 episode = self.episode_service.merge_episode(
                     episode=matching_episode,
@@ -225,6 +254,7 @@ class EpisodeBuilderService:
                 }
                 self.episode_service.update_episode(episode)
                 self._store_episode_embedding(episode)
+                merged_count += 1
                 # Refresh the merged episode in the candidate pool so subsequent items
                 # compare against the updated semantic embedding, not the pre-merge version.
                 for idx, pool_ep in enumerate(merge_candidate_pool):
@@ -239,8 +269,17 @@ class EpisodeBuilderService:
         for ep_id in stale_ids:
             try:
                 self.episode_service.delete_episode(ep_id)
+                logger.info("[episode:delete] session=%s episode_id=%s reason=stale", session_id, ep_id)
             except Exception:
                 pass
+
+        logger.info(
+            "[episode] session=%s created=%d merged=%d stale_deleted=%d",
+            session_id,
+            created_count,
+            merged_count,
+            len(stale_ids),
+        )
 
         # Promote eligible episodes to long-term memory.
         if self.memory_promotion_service and episodes:

@@ -1,5 +1,9 @@
+import logging
+
 from app.db.models.episode import Episode
 from app.db.models.long_term_memory import LongTermMemory
+
+logger = logging.getLogger(__name__)
 from app.db.repositories.long_term_memory_repository import LongTermMemoryRepository
 from app.services.episode_service import EpisodeService
 from app.utils.datetime import utc_now
@@ -27,15 +31,35 @@ class MemoryPromotionService:
 
     def promote_from_episodes(self, episodes: list[Episode]) -> list[LongTermMemory]:
         results: list[LongTermMemory] = []
+        skipped = 0
         for episode in episodes:
             if not self._should_promote(episode):
+                skipped += 1
                 continue
             existing = self.ltm_repository.get_by_episode_id(episode.episode_id)
             if existing:
                 memory = self._update_memory(existing, episode)
+                logger.info(
+                    "[memory:promote] action=update episode_id=%s title=%r importance=%.2f",
+                    episode.episode_id,
+                    episode.title[:60],
+                    episode.importance_score or 0.0,
+                )
             else:
                 memory = self._create_memory(episode)
+                logger.info(
+                    "[memory:promote] action=create episode_id=%s title=%r importance=%.2f",
+                    episode.episode_id,
+                    episode.title[:60],
+                    episode.importance_score or 0.0,
+                )
             results.append(memory)
+        logger.info(
+            "[memory:promote] total=%d promoted=%d skipped=%d",
+            len(episodes),
+            len(results),
+            skipped,
+        )
         return results
 
     def run_full_promotion(self, limit: int = 500) -> list[LongTermMemory]:
