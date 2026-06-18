@@ -1,0 +1,405 @@
+INFO:     Started server process [43090]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:53884 - "GET /api/v1/sessions?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53908 - "GET /api/v1/memories?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53900 - "GET /api/v1/episodes?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36170 - "OPTIONS /api/v1/memories?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36178 - "GET /api/v1/memories?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43908 - "OPTIONS /api/v1/chat/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43918 - "POST /api/v1/chat/messages HTTP/1.1" 201 Created
+Episode idle job failed for session_id=c4b92305-01c8-43ff-895b-6f640b122874
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.UndefinedFunction: could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_idle_scheduler.py", line 140, in _run_job
+    builder.build_from_session(session_id=session_id, rebuild_existing=True)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_builder_service.py", line 80, in build_from_session
+    self.episode_service.list_episodes(source_session_id=session_id, limit=200)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_service.py", line 138, in list_episodes
+    return self.episode_repository.list_episodes(limit=limit, source_session_id=source_session_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/apps/api/app/db/repositories/episode_repository.py", line 33, in list_episodes
+    return list(self.db.execute(stmt).scalars().all())
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedFunction) could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+[SQL: SELECT DISTINCT episodes.episode_id, episodes.title, episodes.summary, episodes.episode_type, episodes.start_rawlog_id, episodes.end_rawlog_id, episodes.start_at, episodes.end_at, episodes.emotion_signal, episodes.importance_score, episodes.source_session_id, episodes.keywords, episodes.metadata 
+FROM episodes JOIN episode_rawlogs ON episode_rawlogs.episode_id = episodes.episode_id JOIN raw_logs ON raw_logs.rawlog_id = episode_rawlogs.rawlog_id 
+WHERE raw_logs.session_id = %(session_id_1)s::VARCHAR ORDER BY episodes.start_at DESC, episodes.episode_id DESC 
+ LIMIT %(param_1)s::INTEGER]
+[parameters: {'session_id_1': 'c4b92305-01c8-43ff-895b-6f640b122874', 'param_1': 200}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+Episode idle job failed for session_id=c4b92305-01c8-43ff-895b-6f640b122874
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.UndefinedFunction: could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_idle_scheduler.py", line 140, in _run_job
+    builder.build_from_session(session_id=session_id, rebuild_existing=True)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_builder_service.py", line 80, in build_from_session
+    self.episode_service.list_episodes(source_session_id=session_id, limit=200)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_service.py", line 138, in list_episodes
+    return self.episode_repository.list_episodes(limit=limit, source_session_id=source_session_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/apps/api/app/db/repositories/episode_repository.py", line 33, in list_episodes
+    return list(self.db.execute(stmt).scalars().all())
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedFunction) could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+[SQL: SELECT DISTINCT episodes.episode_id, episodes.title, episodes.summary, episodes.episode_type, episodes.start_rawlog_id, episodes.end_rawlog_id, episodes.start_at, episodes.end_at, episodes.emotion_signal, episodes.importance_score, episodes.source_session_id, episodes.keywords, episodes.metadata 
+FROM episodes JOIN episode_rawlogs ON episode_rawlogs.episode_id = episodes.episode_id JOIN raw_logs ON raw_logs.rawlog_id = episode_rawlogs.rawlog_id 
+WHERE raw_logs.session_id = %(session_id_1)s::VARCHAR ORDER BY episodes.start_at DESC, episodes.episode_id DESC 
+ LIMIT %(param_1)s::INTEGER]
+[parameters: {'session_id_1': 'c4b92305-01c8-43ff-895b-6f640b122874', 'param_1': 200}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+INFO:     127.0.0.1:41098 - "OPTIONS /api/v1/chat/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41114 - "POST /api/v1/chat/messages HTTP/1.1" 201 Created
+INFO:     127.0.0.1:50596 - "OPTIONS /api/v1/chat/messages HTTP/1.1" 200 OK
+Episode idle job failed for session_id=f10da0c6-7946-4e45-8b98-ceb1bc398ea7
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.UndefinedFunction: could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_idle_scheduler.py", line 140, in _run_job
+    builder.build_from_session(session_id=session_id, rebuild_existing=True)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_builder_service.py", line 80, in build_from_session
+    self.episode_service.list_episodes(source_session_id=session_id, limit=200)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_service.py", line 138, in list_episodes
+    return self.episode_repository.list_episodes(limit=limit, source_session_id=source_session_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/apps/api/app/db/repositories/episode_repository.py", line 33, in list_episodes
+    return list(self.db.execute(stmt).scalars().all())
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedFunction) could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+[SQL: SELECT DISTINCT episodes.episode_id, episodes.title, episodes.summary, episodes.episode_type, episodes.start_rawlog_id, episodes.end_rawlog_id, episodes.start_at, episodes.end_at, episodes.emotion_signal, episodes.importance_score, episodes.source_session_id, episodes.keywords, episodes.metadata 
+FROM episodes JOIN episode_rawlogs ON episode_rawlogs.episode_id = episodes.episode_id JOIN raw_logs ON raw_logs.rawlog_id = episode_rawlogs.rawlog_id 
+WHERE raw_logs.session_id = %(session_id_1)s::VARCHAR ORDER BY episodes.start_at DESC, episodes.episode_id DESC 
+ LIMIT %(param_1)s::INTEGER]
+[parameters: {'session_id_1': 'f10da0c6-7946-4e45-8b98-ceb1bc398ea7', 'param_1': 200}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+Episode idle job failed for session_id=f10da0c6-7946-4e45-8b98-ceb1bc398ea7
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.UndefinedFunction: could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_idle_scheduler.py", line 140, in _run_job
+    builder.build_from_session(session_id=session_id, rebuild_existing=True)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_builder_service.py", line 80, in build_from_session
+    self.episode_service.list_episodes(source_session_id=session_id, limit=200)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_service.py", line 138, in list_episodes
+    return self.episode_repository.list_episodes(limit=limit, source_session_id=source_session_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/apps/api/app/db/repositories/episode_repository.py", line 33, in list_episodes
+    return list(self.db.execute(stmt).scalars().all())
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedFunction) could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+[SQL: SELECT DISTINCT episodes.episode_id, episodes.title, episodes.summary, episodes.episode_type, episodes.start_rawlog_id, episodes.end_rawlog_id, episodes.start_at, episodes.end_at, episodes.emotion_signal, episodes.importance_score, episodes.source_session_id, episodes.keywords, episodes.metadata 
+FROM episodes JOIN episode_rawlogs ON episode_rawlogs.episode_id = episodes.episode_id JOIN raw_logs ON raw_logs.rawlog_id = episode_rawlogs.rawlog_id 
+WHERE raw_logs.session_id = %(session_id_1)s::VARCHAR ORDER BY episodes.start_at DESC, episodes.episode_id DESC 
+ LIMIT %(param_1)s::INTEGER]
+[parameters: {'session_id_1': 'f10da0c6-7946-4e45-8b98-ceb1bc398ea7', 'param_1': 200}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+INFO:     127.0.0.1:50602 - "POST /api/v1/chat/messages HTTP/1.1" 201 Created
+Episode idle job failed for session_id=f10da0c6-7946-4e45-8b98-ceb1bc398ea7
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.UndefinedFunction: could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_idle_scheduler.py", line 140, in _run_job
+    builder.build_from_session(session_id=session_id, rebuild_existing=True)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_builder_service.py", line 80, in build_from_session
+    self.episode_service.list_episodes(source_session_id=session_id, limit=200)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_service.py", line 138, in list_episodes
+    return self.episode_repository.list_episodes(limit=limit, source_session_id=source_session_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/apps/api/app/db/repositories/episode_repository.py", line 33, in list_episodes
+    return list(self.db.execute(stmt).scalars().all())
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedFunction) could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+[SQL: SELECT DISTINCT episodes.episode_id, episodes.title, episodes.summary, episodes.episode_type, episodes.start_rawlog_id, episodes.end_rawlog_id, episodes.start_at, episodes.end_at, episodes.emotion_signal, episodes.importance_score, episodes.source_session_id, episodes.keywords, episodes.metadata 
+FROM episodes JOIN episode_rawlogs ON episode_rawlogs.episode_id = episodes.episode_id JOIN raw_logs ON raw_logs.rawlog_id = episode_rawlogs.rawlog_id 
+WHERE raw_logs.session_id = %(session_id_1)s::VARCHAR ORDER BY episodes.start_at DESC, episodes.episode_id DESC 
+ LIMIT %(param_1)s::INTEGER]
+[parameters: {'session_id_1': 'f10da0c6-7946-4e45-8b98-ceb1bc398ea7', 'param_1': 200}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+Episode idle job failed for session_id=f10da0c6-7946-4e45-8b98-ceb1bc398ea7
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+psycopg.errors.UndefinedFunction: could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_idle_scheduler.py", line 140, in _run_job
+    builder.build_from_session(session_id=session_id, rebuild_existing=True)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_builder_service.py", line 80, in build_from_session
+    self.episode_service.list_episodes(source_session_id=session_id, limit=200)
+  File "/home/shjung/projects/aiLog/apps/api/app/services/episode_service.py", line 138, in list_episodes
+    return self.episode_repository.list_episodes(limit=limit, source_session_id=source_session_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/apps/api/app/db/repositories/episode_repository.py", line 33, in list_episodes
+    return list(self.db.execute(stmt).scalars().all())
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 306, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/home/shjung/projects/aiLog/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 117, in execute
+    raise ex.with_traceback(None)
+sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedFunction) could not identify an equality operator for type json
+LINE 1: ...des.importance_score, episodes.source_session_id, episodes.k...
+                                                             ^
+[SQL: SELECT DISTINCT episodes.episode_id, episodes.title, episodes.summary, episodes.episode_type, episodes.start_rawlog_id, episodes.end_rawlog_id, episodes.start_at, episodes.end_at, episodes.emotion_signal, episodes.importance_score, episodes.source_session_id, episodes.keywords, episodes.metadata 
+FROM episodes JOIN episode_rawlogs ON episode_rawlogs.episode_id = episodes.episode_id JOIN raw_logs ON raw_logs.rawlog_id = episode_rawlogs.rawlog_id 
+WHERE raw_logs.session_id = %(session_id_1)s::VARCHAR ORDER BY episodes.start_at DESC, episodes.episode_id DESC 
+ LIMIT %(param_1)s::INTEGER]
+[parameters: {'session_id_1': 'f10da0c6-7946-4e45-8b98-ceb1bc398ea7', 'param_1': 200}]
+(Background on this error at: https://sqlalche.me/e/20/f405)

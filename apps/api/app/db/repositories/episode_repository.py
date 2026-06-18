@@ -21,15 +21,22 @@ class EpisodeRepository:
         return self.db.execute(stmt).scalar_one_or_none()
 
     def list_episodes(self, limit: int = 50, source_session_id: str | None = None) -> list[Episode]:
-        stmt = select(Episode)
         if source_session_id is not None:
-            stmt = (
-                stmt.join(EpisodeRawLog, EpisodeRawLog.episode_id == Episode.episode_id)
+            # Use a subquery to get episode_ids first — avoids DISTINCT over json columns.
+            id_subquery = (
+                select(distinct(EpisodeRawLog.episode_id))
                 .join(RawLog, RawLog.rawlog_id == EpisodeRawLog.rawlog_id)
                 .where(RawLog.session_id == source_session_id)
-                .distinct()
+                .scalar_subquery()
             )
-        stmt = stmt.order_by(Episode.start_at.desc(), Episode.episode_id.desc()).limit(limit)
+            stmt = (
+                select(Episode)
+                .where(Episode.episode_id.in_(id_subquery))
+                .order_by(Episode.start_at.desc(), Episode.episode_id.desc())
+                .limit(limit)
+            )
+        else:
+            stmt = select(Episode).order_by(Episode.start_at.desc(), Episode.episode_id.desc()).limit(limit)
         return list(self.db.execute(stmt).scalars().all())
 
     def list_all(self, limit: int = 200) -> list[Episode]:

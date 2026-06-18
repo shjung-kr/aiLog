@@ -15,6 +15,8 @@ class Settings:
     episode_idle_seconds = int(os.getenv("EPISODE_IDLE_SECONDS", "30"))
     admin_api_key = os.getenv("AILOG_ADMIN_API_KEY", "")
     chat_web_search_default = os.getenv("CHAT_WEB_SEARCH_DEFAULT", "true").lower() in {"1", "true", "yes", "on"}
+    gist_boundary_threshold = float(os.getenv("GIST_BOUNDARY_THRESHOLD", "0.75"))
+    gist_max_segment_size = int(os.getenv("GIST_MAX_SEGMENT_SIZE", "8"))
 
 
 settings = Settings()

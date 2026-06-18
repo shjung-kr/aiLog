@@ -1,3 +1,4 @@
+from app.core.config import settings
 from app.db.models.gist import Gist
 from app.db.repositories.gist_repository import GistRepository
 from app.llm.client import LLMClient
@@ -21,7 +22,8 @@ class GistService:
         self.gist_repository = gist_repository
         self.rawlog_service = rawlog_service
         self.turn_service = turn_service
-        self.segmenter = Segmenter()
+        self.llm_client = llm_client
+        self.segmenter = Segmenter(max_turns_per_segment=settings.gist_max_segment_size)
         self.generator = GistGenerator(llm_client)
         self.validator = GistValidator()
 
@@ -55,7 +57,7 @@ class GistService:
                 ],
             })
 
-        segments = self.segmenter.segment(turn_dicts)
+        segments = self._segment_turns(turn_dicts)
         gist_datas = self.generator.generate_batch(segments)
 
         gists: list[Gist] = []
@@ -92,6 +94,21 @@ class GistService:
             return []
 
         return self.gist_repository.create_many(gists)
+
+    def _segment_turns(self, turn_dicts: list[dict]) -> list[list[dict]]:
+        turn_texts = [
+            " ".join(r["content"] for r in turn.get("rawlogs", []))
+            for turn in turn_dicts
+        ]
+        try:
+            embeddings = self.llm_client.embed_texts(turn_texts)
+            return self.segmenter.segment_with_boundaries(
+                turn_dicts,
+                embeddings,
+                threshold=settings.gist_boundary_threshold,
+            )
+        except Exception:
+            return self.segmenter.segment(turn_dicts)
 
     def list_for_session(self, session_id: str) -> list[Gist]:
         return self.gist_repository.list_by_session_id(session_id)
