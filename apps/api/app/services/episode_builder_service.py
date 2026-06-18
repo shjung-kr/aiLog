@@ -114,20 +114,22 @@ class EpisodeBuilderService:
         if gists:
             valid_rawlog_ids: set[str] = set()
             gist_segments: list[dict] = []
+            gist_rawlog_map: dict[str, list[str]] = {}
             for gist in gists:
                 rawlog_ids = (gist.metadata_json or {}).get("rawlog_ids", [])
                 valid_rawlog_ids.update(rawlog_ids)
+                gist_rawlog_map[gist.gist_id] = rawlog_ids
                 gist_segments.append({
                     "gist_id": gist.gist_id,
                     "gist_text": gist.gist_text,
                     "topic": gist.topic,
                     "intent": gist.intent,
-                    "rawlog_ids": rawlog_ids,
                 })
 
             built_episodes = self.episode_builder.build_from_gists(
                 gist_segments=gist_segments,
                 valid_rawlog_ids=valid_rawlog_ids,
+                gist_rawlog_map=gist_rawlog_map,
             )
         else:
             turns = self.turn_service.build_from_session(session_id)

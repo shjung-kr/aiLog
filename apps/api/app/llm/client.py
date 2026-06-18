@@ -428,13 +428,16 @@ class LLMClient:
                 "\"user_goal\":\"...\",\"context\":\"...\",\"decision_or_insight\":\"...\","
                 "\"emotional_or_situational_cue\":null,\"representative_snippets\":[\"...\"],"
                 "\"semantic_text\":\"...\","
-                "\"rawlog_ids\":[\"...\"]}]}. "
-                "Each rawlog_id must come from the provided gist segments' rawlog_ids exactly."
+                "\"gist_ids\":[\"...\"]}]}. "
+                "gist_ids must list every gist_id that belongs to this episode — include ALL gist_ids "
+                "whose content contributed to this episode, not just one representative gist. "
+                "Each gist_id must come from the provided gist segments exactly."
             ),
             input=(
                 "Build semantic episodes from these gist segments. "
                 "Each gist is a compressed summary of a conversation chunk. "
                 "Group gists that share the same theme, goal, or problem into a single episode. "
+                "For each episode, list ALL gist_ids whose content belongs to that episode in the gist_ids field. "
                 "semantic_text must start with a search-focused topic sentence, then continue as a first-person "
                 "retrospective narrative optimized for natural-language recall queries.\n\n"
                 f"{json.dumps({'gists': gist_segments}, ensure_ascii=False)}"
@@ -446,14 +449,13 @@ class LLMClient:
         return self._parse_episode_json(content)
 
     def _parse_episode_json(self, content: str) -> list[dict]:
+        start = content.find("{")
+        if start < 0:
+            raise RuntimeError("OpenAI did not return valid JSON")
         try:
-            data = json.loads(content)
-        except json.JSONDecodeError:
-            start = content.find("{")
-            end = content.rfind("}")
-            if start < 0 or end < start:
-                raise RuntimeError("OpenAI did not return valid JSON") from None
-            data = json.loads(content[start : end + 1])
+            data, _ = json.JSONDecoder().raw_decode(content, start)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"OpenAI did not return valid JSON: {exc}") from exc
 
         episodes = data.get("episodes")
         if not isinstance(episodes, list):

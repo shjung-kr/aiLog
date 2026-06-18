@@ -1,6 +1,9 @@
+import logging
 from dataclasses import dataclass
 
 from app.llm.client import LLMClient
+
+logger = logging.getLogger(__name__)
 
 SEMANTIC_TEXT_METADATA_KEY = "semantic_text"
 EMBEDDING_SOURCE_VERSION_METADATA_KEY = "embedding_source_version"
@@ -31,13 +34,41 @@ class EpisodeBuilder:
     def __init__(self, llm_client: LLMClient) -> None:
         self.llm_client = llm_client
 
-    def build_from_gists(self, gist_segments: list[dict], valid_rawlog_ids: set[str]) -> list[BuiltEpisode]:
+    def build_from_gists(
+        self,
+        gist_segments: list[dict],
+        valid_rawlog_ids: set[str],
+        gist_rawlog_map: dict[str, list[str]] | None = None,
+    ) -> list[BuiltEpisode]:
         if not gist_segments:
             return []
 
         episodes: list[BuiltEpisode] = []
         for item in self.llm_client.build_episodes_from_gists(gist_segments):
-            rawlog_ids = [rid for rid in item.get("rawlog_ids", []) if rid in valid_rawlog_ids]
+            # Collect rawlog_ids from the gist_ids the LLM assigned to this episode.
+            # This is more reliable than asking the LLM to enumerate individual rawlog_ids.
+            gist_ids = item.get("gist_ids") if isinstance(item.get("gist_ids"), list) else []
+            if gist_rawlog_map is not None:
+                # Gist mode: always collect rawlogs via gist_rawlog_map.
+                # Never fall back to LLM-reported rawlog_ids — LLM may hallucinate or omit IDs.
+                rawlog_ids = []
+                seen: set[str] = set()
+                for gid in gist_ids:
+                    for rid in gist_rawlog_map.get(str(gid), []):
+                        if rid in valid_rawlog_ids and rid not in seen:
+                            seen.add(rid)
+                            rawlog_ids.append(rid)
+                if not rawlog_ids:
+                    logger.warning(
+                        "[episode_builder] gist mode: no rawlogs collected for episode %r — "
+                        "LLM returned gist_ids=%r, map keys=%d",
+                        item.get("title"),
+                        gist_ids,
+                        len(gist_rawlog_map),
+                    )
+            else:
+                # Legacy turn mode: use rawlog_ids directly from LLM response.
+                rawlog_ids = [rid for rid in item.get("rawlog_ids", []) if rid in valid_rawlog_ids]
             if not rawlog_ids:
                 continue
 

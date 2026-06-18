@@ -18,6 +18,7 @@ from app.services.episode_service import EpisodeService
 from app.services.gist_service import GistService
 from app.services.rawlog_service import RawLogService
 from app.services.session_service import SessionService
+from app.services.episode_idle_scheduler import episode_idle_scheduler
 from app.services.turn_service import TurnService
 
 router = APIRouter()
